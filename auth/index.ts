@@ -1,3 +1,4 @@
+// auth/index.ts
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth/config";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -6,13 +7,14 @@ import { getUserById, updateUserById } from "@/services/user";
 import { getTwoFactorConfirmationByUserId } from "@/services/two-factor-confirmation";
 import { isExpired } from "@/lib/utils";
 import { getAccountByUserId } from "@/services/account";
+import { UserRole } from "@prisma/client";
 
 export const {
   handlers: { GET, POST },
   auth,
   signIn,
   signOut,
-  update
+  unstable_update,
 } = NextAuth({
   adapter: PrismaAdapter(db),
   session: {
@@ -25,7 +27,7 @@ export const {
   },
   events: {
     async linkAccount({ user }) {
-      await updateUserById(user.id, { emailVerified: new Date() });
+      await updateUserById(user.id!, { emailVerified: new Date() });
     },
   },
   callbacks: {
@@ -39,7 +41,7 @@ export const {
 
       token.name = existingUser.name;
       token.email = existingUser.email;
-      token.role = existingUser.role;
+      token.role = existingUser.role as UserRole;
       token.isTwoFactorEnabled = existingUser.isTwoFactorEnabled;
       token.isOAuth = !!existingAccount;
 
@@ -51,14 +53,14 @@ export const {
       }
 
       if (token.role && session.user) {
-        session.user.role = token.role;
+        session.user.role = token.role as UserRole;
       }
 
       if (session.user) {
-        session.user.name = token.name;
-        session.user.email = token.email;
-        session.user.isTwoFactorEnabled = token.isTwoFactorEnabled;
-        session.user.isOAuth = token.isOAuth;
+        session.user.name = token.name as string;
+        session.user.email = token.email as string;
+        session.user.isTwoFactorEnabled = token.isTwoFactorEnabled as boolean;
+        session.user.isOAuth = token.isOAuth as boolean;
       }
 
       return session;
@@ -66,7 +68,7 @@ export const {
     async signIn({ user, account }) {
       if (account?.provider !== "credentials") return true;
 
-      const existingUser = await getUserById(user.id);
+      const existingUser = await getUserById(user.id!);
       // Prevent sign in without email verification
       if (!existingUser?.emailVerified) return false;
 

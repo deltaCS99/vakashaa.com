@@ -1,6 +1,6 @@
 "use server";
 
-import { signIn } from "@/auth";
+import { signIn, signOut } from "@/auth";
 import { loginSchema } from "@/schemas";
 import { z } from "zod";
 import { DEFAULT_LOGIN_REDIRECT } from "@/routes";
@@ -123,7 +123,25 @@ export const signInCredentials = async (email: string, password: string) => {
             error: {
               code: 403,
               message:
-                "Another account already registered with the same Email Address. Please login the different one.",
+                "Another account already registered with the same Email Address. Please login with the original provider.",
+            },
+          });
+
+        case "AccountNotLinked":
+          return response({
+            success: false,
+            error: {
+              code: 403,
+              message: "Account not linked. Please sign in with your original provider.",
+            },
+          });
+
+        case "EmailSignInError":
+          return response({
+            success: false,
+            error: {
+              code: 400,
+              message: "Email sign in failed. Please try again.",
             },
           });
 
@@ -136,12 +154,39 @@ export const signInCredentials = async (email: string, password: string) => {
             },
           });
 
-        case "AuthorizedCallbackError":
+        case "AccessDenied":
           return response({
             success: false,
             error: {
-              code: 422,
-              message: "Authorization failed. Please try again.",
+              code: 403,
+              message: "Access denied.",
+            },
+          });
+
+        case "InvalidCallbackUrl":
+          return response({
+            success: false,
+            error: {
+              code: 400,
+              message: "Invalid callback URL.",
+            },
+          });
+
+        case "MissingCSRF":
+          return response({
+            success: false,
+            error: {
+              code: 403,
+              message: "Security validation failed. Please try again.",
+            },
+          });
+
+        case "SessionTokenError":
+          return response({
+            success: false,
+            error: {
+              code: 401,
+              message: "Session error. Please try signing in again.",
             },
           });
 
@@ -150,7 +195,7 @@ export const signInCredentials = async (email: string, password: string) => {
             success: false,
             error: {
               code: 500,
-              message: "Something went wrong.",
+              message: "Authentication error. Please try again.",
             },
           });
       }
@@ -159,3 +204,7 @@ export const signInCredentials = async (email: string, password: string) => {
     throw error;
   }
 };
+
+export async function handleSignOut() {
+  await signOut();
+}

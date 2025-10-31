@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Metadata } from "next";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "404 Not Found",
@@ -7,31 +8,17 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <div className="py-16 w-full min-h-screen flex justify-center md:items-center bg-white">
-      <div className="mx-auto max-w-xl lg:max-w-4xl flex flex-col lg:flex-row">
-        <div className="relative px-5 lg:border-r-2 border-gray-100">
-          <p className="absolute -top-3 md:top-0 left-10 md:left-20 text-base md:text-4xl text-indigo-600 font-bold uppercase">
-            Error
+    <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
+      <div className="max-w-md w-full px-6 py-8">
+        <div className="text-center">
+          <h1 className="text-6xl font-bold text-gray-900 mb-2">404</h1>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Page Not Found</h2>
+          <p className="text-gray-600 mb-8">
+            The page you&apos;re looking for doesn&apos;t exist. It may have been removed or you might have mistyped the URL.
           </p>
-          <p className="text-7xl md:text-10xl text-gray-700 font-extrabold tracking-wider">404</p>
-        </div>
-
-        <div className="px-5">
-          <p className="text-3xl md:text-5xl text-gray-700 font-bold tracking-wide">
-            Page Not Found
-          </p>
-          <p className="mt-4 text-sm md:text-base text-gray-500 font-medium">
-            The content you’re looking for doesn’t exist. Either it was removed, or you mistyped the
-            link. <br />
-            <br />
-            Sorry about that! Please visit our homepage to get where you need to go.
-          </p>
-          <Link
-            href="/"
-            className="mt-10 relative inline-flex items-center px-7 py-3.5 rounded border border-transparent bg-indigo-600 md:text-lg text-white font-medium hover:bg-indigo-700"
-          >
-            Go back to Homepage
-          </Link>
+          <Button asChild>
+            <Link href="/">Return to Homepage</Link>
+          </Button>
         </div>
       </div>
     </div>

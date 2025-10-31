@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Vakashaa.com MVP - Quote-Based Only System
 
 generator client {
   provider = "prisma-client-js"
@@ -11,41 +10,66 @@ datasource db {
   directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
+// =====================================================
+// ENUMS
+// =====================================================
 
 enum UserRole {
   Admin
   User
+  Operator
 }
 
-model User {
-  id                    String                 @id @default(cuid())
-  name                  String?
-  email                 String?                @unique
-  emailVerified         DateTime?
-  image                 String? // You can use gravatar.com to get image profile
-  password              String?
-  role                  UserRole               @default(User)
-  accounts              Account[]
-  isTwoFactorEnabled    Boolean                @default(false)
-  twoFactorConfirmation TwoFactorConfirmation?
+enum OperatorType {
+  TourOperator
+  DMC // Destination Management Company
+}
+
+enum ServiceType {
+  Inbound // Brings international tourists into SA
+  Domestic // SA residents touring within SA
+  Outbound // Takes SA residents abroad
+  All // Does all three
+}
+
+enum QuoteStatus {
+  Pending // Awaiting operator response
+  Quoted // Operator sent quote
+  Accepted // User accepted, awaiting payment
+  Paid // Payment received - this is the confirmed booking
+  Rejected // User rejected quote
+  Expired // Quote validity expired
+  Cancelled // Cancelled after acceptance
+}
+
+enum BlogStatus {
+  Draft
+  Published
+  Archived
+}
+
+// =====================================================
+// NEXTAUTH MODELS
+// =====================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refreshToken      String? @map("refresh_token") @db.Text
+  accessToken       String? @map("access_token") @db.Text
+  expiresAt         Int?    @map("expires_at")
+  tokenType         String? @map("token_type")
+  scope             String?
+  idToken           String? @map("id_token") @db.Text
+  sessionState      String? @map("session_state")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
 model VerificationToken {
@@ -55,6 +79,7 @@ model VerificationToken {
   expires DateTime
 
   @@unique([email, token])
+  @@map("verification_tokens")
 }
 
 model ResetPasswordToken {
@@ -64,6 +89,7 @@ model ResetPasswordToken {
   expires DateTime
 
   @@unique([email, token])
+  @@map("reset_password_tokens")
 }
 
 model TwoFactorToken {
@@ -73,11 +99,257 @@ model TwoFactorToken {
   expires DateTime
 
   @@unique([email, token])
+  @@map("two_factor_tokens")
 }
 
 model TwoFactorConfirmation {
   id      String   @id @default(cuid())
-  userId  String   @unique
+  userId  String   @unique @map("user_id")
   expires DateTime
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("two_factor_confirmations")
+}
+
+// =====================================================
+// USER MODEL
+// =====================================================
+
+model User {
+  id                 String    @id @default(cuid())
+  name               String?
+  email              String?   @unique
+  emailVerified      DateTime? @map("email_verified")
+  image              String?
+  password           String?
+  role               UserRole  @default(User)
+  phone              String?
+  whatsappNumber     String?   @map("whatsapp_number")
+  isTwoFactorEnabled Boolean   @default(false) @map("is_two_factor_enabled")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  accounts              Account[]
+  twoFactorConfirmation TwoFactorConfirmation?
+  quoteRequests         QuoteRequest[]
+  operatorProfile       OperatorProfile[]
+  blogPosts             BlogPost[]
+
+  @@map("users")
+}
+
+// =====================================================
+// OPERATOR PROFILE
+// =====================================================
+
+model OperatorProfile {
+  id               String       @id @default(cuid())
+  userId           String       @unique @map("user_id")
+  businessName     String       @map("business_name")
+  businessPhone    String?      @map("business_phone")
+  businessWhatsApp String?      @map("business_whatsapp")
+  description      String?
+  operatorType     OperatorType @default(TourOperator) @map("operator_type")
+  serviceType      ServiceType  @default(All) @map("service_type")
+  isApproved       Boolean      @default(false) @map("is_approved")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tours Tour[]
+
+  @@map("operator_profiles")
+}
+
+// =====================================================
+// TOUR
+// =====================================================
+
+model Tour {
+  id                String  @id @default(cuid())
+  operatorProfileId String  @map("operator_profile_id")
+  title             String
+  description       String  @db.Text
+  duration          String
+  category          String?
+
+  // Indicative pricing (for display only - actual price comes via quote)
+  // Stored in cents: R2,500 = 250000
+  priceFrom Int?   @map("price_from")
+  currency  String @default("ZAR")
+
+  // Location
+  countries    String[]
+  region       String?
+  destinations String[] @default([])
+
+  // Dates
+  departureDates  Json?    @map("departure_dates") // [{ start: "2025-09-25", end: "2025-09-28" }]
+  availableMonths Int[]    @default([]) @map("available_months") // [6,7,8,9]
+  availableDates  String[] @default([]) @map("available_dates")
+
+  // Logistics
+  pickupLocations Json? @map("pickup_locations") // [{ point: "Hotel A", time: "08:00" }]
+  maxCapacity     Int?  @map("max_capacity")
+
+  // Inclusions / Exclusions (general tour info - simple list)
+  inclusions String[] @default([])
+  exclusions String[] @default([])
+
+  // Terms
+  cancellationPolicy String? @map("cancellation_policy") @db.Text
+
+  // Media
+  images String[] @default([])
+
+  // Platform controls
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  operatorProfile  OperatorProfile @relation(fields: [operatorProfileId], references: [id], onDelete: Cascade)
+  quoteRequests    QuoteRequest[]
+  relatedBlogPosts BlogPost[]      @relation("BlogRelatedTours")
+
+  @@index([operatorProfileId])
+  @@index([isActive])
+  @@index([countries])
+  @@index([region])
+  @@index([category])
+  @@map("tours")
+}
+
+// =====================================================
+// QUOTE REQUESTS (All bookings go through quotes)
+// =====================================================
+
+model QuoteRequest {
+  id        String @id @default(cuid())
+  reference String @unique // QR-xxxxx for quotes, BK-xxxxx when paid
+  userId    String @map("user_id")
+  tourId    String @map("tour_id")
+
+  // Request Details
+  preferredDate String  @map("preferred_date")
+  flexibleDates Boolean @default(false) @map("flexible_dates")
+  adults        Int     @default(1)
+  children      Int     @default(0)
+  childAges     Int[]   @default([]) @map("child_ages")
+  budgetRange   String? @map("budget_range")
+
+  // Customer Contact
+  customerName     String  @map("customer_name")
+  customerEmail    String  @map("customer_email")
+  customerPhone    String  @map("customer_phone")
+  customerWhatsApp String? @map("customer_whatsapp")
+
+  // Requirements
+  specialRequirements String? @map("special_requirements") @db.Text
+
+  // Status
+  status QuoteStatus @default(Pending)
+
+  // Operator's Quote (null until quoted)
+  quotedPrice        Int?      @map("quoted_price")
+  quotedInclusions   Json?     @map("quoted_inclusions") // [{ item: "Accommodation", price: null }, { item: "Upgrade", price: 80000 }]
+  quotedExclusions   Json?     @map("quoted_exclusions") // [{ item: "Flights", price: 450000 }, { item: "Tips", price: null }]
+  quotedTerms        String?   @map("quoted_terms") @db.Text
+  quoteValidityHours Int?      @map("quote_validity_hours")
+  quotedAt           DateTime? @map("quoted_at")
+  quoteExpiresAt     DateTime? @map("quote_expires_at")
+
+  // Quote Revisions
+  revisionCount Int       @default(0) @map("revision_count")
+  lastRevisedAt DateTime? @map("last_revised_at")
+
+  // Payment (when status = Paid, this becomes the booking)
+  paymentLink      String?   @map("payment_link")
+  paymentReference String?   @map("payment_reference")
+  paidAt           DateTime? @map("paid_at")
+  paidAmount       Int?      @map("paid_amount")
+
+  // Response Tracking
+  acceptedAt         DateTime? @map("accepted_at")
+  rejectedAt         DateTime? @map("rejected_at")
+  rejectionReason    String?   @map("rejection_reason") @db.Text
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancellationReason String?   @map("cancellation_reason") @db.Text
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tour     Tour           @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  messages QuoteMessage[]
+
+  @@index([userId, status])
+  @@index([tourId, status])
+  @@index([reference])
+  @@index([customerEmail])
+  @@index([status, quoteExpiresAt])
+  @@map("quote_requests")
+}
+
+// =====================================================
+// QUOTE MESSAGES
+// =====================================================
+
+model QuoteMessage {
+  id             String   @id @default(cuid())
+  quoteRequestId String   @map("quote_request_id")
+  senderId       String   @map("sender_id")
+  senderType     String   @map("sender_type") // "customer" or "operator"
+  message        String   @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  quoteRequest QuoteRequest @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+
+  @@index([quoteRequestId])
+  @@map("quote_messages")
+}
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+model Setting {
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+// =====================================================
+// BLOG / CONTENT (SEO)
+// =====================================================
+
+model BlogPost {
+  id              String     @id @default(cuid())
+  authorId        String     @map("author_id")
+  title           String
+  slug            String     @unique
+  excerpt         String     @db.Text
+  content         String     @db.Text
+  featuredImage   String?    @map("featured_image")
+  metaTitle       String?    @map("meta_title")
+  metaDescription String?    @map("meta_description")
+  keywords        String[]   @default([])
+  category        String?
+  tags            String[]   @default([])
+  status          BlogStatus @default(Draft)
+  publishedAt     DateTime?  @map("published_at")
+  viewCount       Int        @default(0) @map("view_count")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  author       User   @relation(fields: [authorId], references: [id])
+  relatedTours Tour[] @relation("BlogRelatedTours")
+
+  @@index([slug])
+  @@index([status, publishedAt])
+  @@index([category])
+  @@map("blog_posts")
 }
