@@ -1,21 +1,28 @@
 {
-  "name": "next-dashboard",
+  "name": "vakashaa",
   "version": "0.1.0",
   "private": true,
+  "description": "South Africa's premier platform connecting travelers with trusted local tour operators",
+  "homepage": "https://vakashaa.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deltaCS99/vakashaa.com"
+  },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "author": {
-    "name": "Zulmy Azhary",
-    "email": "zulmyazhary32@gmail.com",
-    "url": "https://zoel.vercel.app"
+    "name": "Vakashaa Team",
+    "email": "info@vakashaa.com",
+    "url": "https://vakashaa.com"
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    "vercel-build": "prisma generate && prisma migrate deploy && prisma db seed && next build",
     "prisma:update": "npx prisma generate && npx prisma db push",
     "prisma:clean": "npx prisma generate && npx prisma migrate reset && npx prisma db push",
     "postinstall": "prisma generate"

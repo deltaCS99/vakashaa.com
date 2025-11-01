@@ -7,8 +7,22 @@ const prisma = new PrismaClient();
 async function main() {
     console.log("🌱 Starting seed...");
 
+    // Check if database is already seeded (IDEMPOTENT CHECK)
+    const existingUsers = await prisma.user.count();
+    const existingSettings = await prisma.setting.count();
+
+    if (existingUsers > 0 || existingSettings > 0) {
+        console.log("✅ Database already seeded. Skipping...");
+        console.log(`   Found ${existingUsers} users and ${existingSettings} settings`);
+        console.log("   To re-seed, run: npm run prisma:clean");
+        return;
+    }
+
+    console.log("🆕 Empty database detected. Starting fresh seed...");
+
     // 1. Seed Settings
     console.log("📋 Creating settings...");
+
     const settings = [
         { key: "platform_commission_rate", value: "7" },
         { key: "operator_payout_schedule", value: "weekly" },
