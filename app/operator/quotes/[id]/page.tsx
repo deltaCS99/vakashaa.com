@@ -135,8 +135,14 @@ export default async function OperatorQuoteDetailPage({ params }: PageProps) {
                                         hasQuoted
                                             ? {
                                                 quotedPrice: quoteRequest.quotedPrice!,
-                                                quotedInclusions: quoteRequest.quotedInclusions as any,
-                                                quotedExclusions: quoteRequest.quotedExclusions as any,
+                                                quotedInclusions: (quoteRequest.quotedInclusions &&
+                                                    Array.isArray(quoteRequest.quotedInclusions))
+                                                    ? quoteRequest.quotedInclusions as Array<{ item: string; price: number | null }>
+                                                    : [],
+                                                quotedExclusions: (quoteRequest.quotedExclusions &&
+                                                    Array.isArray(quoteRequest.quotedExclusions))
+                                                    ? quoteRequest.quotedExclusions as Array<{ item: string; price: number | null }>
+                                                    : [],
                                                 quotedTerms: quoteRequest.quotedTerms || "",
                                                 quoteValidityHours: quoteRequest.quoteValidityHours || 72,
                                             }
