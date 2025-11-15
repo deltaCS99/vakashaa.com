@@ -1,9 +1,13 @@
 // components/home/hero-section.tsx
 "use client"
 
+import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 
 interface HeroSectionProps {
@@ -15,6 +19,7 @@ export function HeroSection({ localDestinations, internationalCountries }: HeroS
     const { currentLang, currentIndex, isAnimating } = useLanguage()
     const router = useRouter()
     const searchParams = useSearchParams()
+    const [searchQuery, setSearchQuery] = useState(searchParams.get("search") ?? "")
 
     const handleDestinationSelect = (value: string, type: "local" | "international") => {
         const params = new URLSearchParams()
@@ -33,17 +38,30 @@ export function HeroSection({ localDestinations, internationalCountries }: HeroS
         router.push(`/?${params.toString()}`)
     }
 
+    const handleHeroSearch = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        const params = new URLSearchParams(searchParams.toString())
+
+        if (searchQuery.trim()) {
+            params.set("search", searchQuery.trim())
+        } else {
+            params.delete("search")
+        }
+
+        params.delete("page")
+        router.push(`/?${params.toString()}`)
+    }
+
     return (
-        <section className="relative text-white py-20 md:py-32 overflow-hidden">
-            {/* Background Image - Southern African Landscape */}
+        <section className="relative isolate text-white min-h-[720px] py-20 md:py-32 flex items-center overflow-hidden">
+            {/* Background image with dark top overlay */}
             <div
-                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                className="absolute inset-0 -z-20 bg-cover bg-center bg-no-repeat"
                 style={{
-                    backgroundImage: "url('https://images.unsplash.com/photo-1489392191049-fc10c97e64b6?q=80&w=2067')",
+                    backgroundImage: `linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 35%), linear-gradient(0deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)), url('https://images.unsplash.com/photo-1489392191049-fc10c97e64b6?q=80&w=2067')`,
                 }}
             />
-
-            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/60" />
+            <div className="absolute inset-x-0 bottom-0 -z-10 h-48 bg-gradient-to-b from-transparent via-white/60 to-white" />
 
             <div className="container mx-auto px-4 relative z-10">
                 <div className="max-w-4xl mx-auto text-center space-y-8">
@@ -124,21 +142,35 @@ export function HeroSection({ localDestinations, internationalCountries }: HeroS
                         </Tabs>
                     </div>
 
-                    {/* Subtitle */}
-                    <p className="text-xl md:text-2xl text-white/95 font-light drop-shadow-lg">
-                        Connect with vetted local operators for authentic Southern African experiences
-                    </p>
-                </div>
-            </div>
+                    {/* Subtitle + Hero search */}
+                    <div className="space-y-6">
+                        <p className="text-xl md:text-2xl text-white/95 font-light drop-shadow-lg">
+                            Connect with vetted local operators for authentic Southern African experiences
+                        </p>
 
-            {/* Wave Divider */}
-            <div className="absolute bottom-0 left-0 right-0">
-                <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-                    <path
-                        d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0V0Z"
-                        fill="rgb(249 250 251)"
-                    />
-                </svg>
+                        <form
+                            onSubmit={handleHeroSearch}
+                            className="bg-white/80 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/40 flex flex-col md:flex-row gap-4 mx-auto"
+                        >
+                            <div className="relative flex-1">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <Input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    placeholder="Search tours..."
+                                    className="h-14 pl-12 text-lg bg-white text-gray-900 border-0 ring-0 focus-visible:ring-2 focus-visible:ring-amber-500/60"
+                                />
+                            </div>
+                            <Button
+                                type="submit"
+                                className="h-14 px-8 text-lg rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-lg"
+                            >
+                                Search tours
+                            </Button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </section>
     )
