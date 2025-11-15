@@ -27,52 +27,36 @@ import {
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { handleSignOut } from "@/actions/login"
+import { Logo } from "@/components/logo"
+import { NavMenu, type NavMenuItemConfig } from "@/components/nav-menu"
+import { NavigationSheet } from "@/components/navigation-sheet"
 
 interface NavbarProps {
   user: any
 }
 
-function AnimatedLogo() {
-  return (
-    <h1 className="text-xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent min-w-[140px]">
-      Vakashaa
-    </h1>
-  )
-}
+const PRIMARY_LINKS = [
+  { label: "Tours", href: "/" },
+  { label: "Blog", href: "/blog" },
+  { label: "About", href: "/about" },
+]
 
-function NavLinks() {
-  const pathname = usePathname()
-
-  const isActive = (path: string) => {
-    if (path === "/") {
-      return pathname === "/"
-    }
-    return pathname.startsWith(path)
+const isActiveLink = (pathname: string, target: string) => {
+  if (target === "/") {
+    return pathname === "/"
   }
 
-  return (
-    <div className="hidden md:flex items-center gap-1">
-      <Button variant="ghost" asChild className={isActive("/") && pathname === "/" ? "bg-accent" : ""}>
-        <Link href="/">Tours</Link>
-      </Button>
-      <Button variant="ghost" asChild className={isActive("/blog") ? "bg-accent" : ""}>
-        <Link href="/blog">Blog</Link>
-      </Button>
-      <Button variant="ghost" asChild className={isActive("/about") ? "bg-accent" : ""}>
-        <Link href="/about">About</Link>
-      </Button>
-    </div>
-  )
+  return pathname.startsWith(target)
 }
 
 function AuthNav({ user }: { user: any }) {
   if (!user) {
     return (
       <div className="flex items-center gap-2">
-        <Button variant="ghost" asChild>
+        <Button variant="outline" asChild className="hidden rounded-full sm:inline-flex">
           <Link href="/login">Login</Link>
         </Button>
-        <Button asChild>
+        <Button asChild className="rounded-full">
           <Link href="/register">Sign Up</Link>
         </Button>
       </div>
@@ -82,7 +66,11 @@ function AuthNav({ user }: { user: any }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="pr-4 rounded-none h-fit flex gap-x-2 focus-visible:ring-offset-0">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex h-10 items-center gap-2 rounded-full border border-input bg-white px-2 pr-4 text-sm font-medium shadow-sm focus-visible:ring-offset-0"
+        >
           <Avatar className="h-8 w-8">
             <AvatarImage src={user.image ?? ""} />
             <AvatarFallback>
@@ -265,36 +253,45 @@ function AuthNav({ user }: { user: any }) {
 }
 
 export default function Navbar({ user }: NavbarProps) {
+  const pathname = usePathname()
   const isOperator = user?.role === "Operator"
   const isAdmin = user?.role === "Admin"
 
+  const navItems: NavMenuItemConfig[] = PRIMARY_LINKS.map((link) => ({
+    ...link,
+    isActive: isActiveLink(pathname, link.href),
+  }))
+
   return (
-    <nav className="sticky top-0 z-50 flex items-center justify-between bg-white border-b px-4 md:px-6 h-16 shadow-sm">
-      <div className="flex items-center gap-6">
-        <Link href="/" className="flex items-center hover:opacity-80 transition-opacity">
-          <AnimatedLogo />
-        </Link>
+    <nav className="fixed inset-x-4 top-4 z-50">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between rounded-full border border-border bg-background/95 px-4 shadow-lg shadow-black/5 backdrop-blur">
+        <div className="flex flex-1 items-center gap-4">
+          <Link href="/" className="flex items-center gap-3 rounded-full border border-input bg-white px-4 py-2">
+            <Logo />
+          </Link>
+          <NavMenu items={navItems} className="hidden md:flex" />
+        </div>
 
-        {/* Main Navigation */}
-        <NavLinks />
-      </div>
+        <div className="flex flex-1 items-center justify-end gap-3">
+          {user && !isOperator && !isAdmin && (
+            <Button
+              variant="outline"
+              asChild
+              className="hidden rounded-full border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white md:inline-flex"
+            >
+              <Link href="/operator/apply">
+                <Users className="mr-2 h-4 w-4" />
+                Become a Tour Operator
+              </Link>
+            </Button>
+          )}
 
-      <div className="flex items-center gap-3">
-        {user && !isOperator && !isAdmin && (
-          <Button
-            variant="outline"
-            asChild
-            className="hidden md:inline-flex border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white bg-transparent"
-          >
-            <Link href="/operator/apply">
-              <Users className="mr-2 h-4 w-4" />
-              Become a Tour Operator
-            </Link>
-          </Button>
-        )}
+          <AuthNav user={user} />
 
-        {/* Auth Navigation */}
-        <AuthNav user={user} />
+          <div className="md:hidden">
+            <NavigationSheet items={navItems} />
+          </div>
+        </div>
       </div>
     </nav>
   )
