@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { BlogStatus } from "@prisma/client";
 import { azureOpenAI, DEPLOYMENT_NAME } from "@/lib/azure-openai";
 import { searchWeb } from "@/lib/serpapi";
+import { scrapeForResearch } from "@/lib/firecrawl";
 
 // ----------------------
 // ADMIN: BLOG CRUD
@@ -322,15 +323,30 @@ export const generateBlogPost = async (params: GenerateBlogParams) => {
     // Get current year dynamically
     const currentYear = new Date().getFullYear();
 
-    // Step 1: Research
-    console.log("🔍 Researching topic:", topic);
+    console.log("\n" + "=".repeat(60));
+    console.log(`🚀 STARTING BLOG GENERATION: "${topic}"`);
+    console.log("=".repeat(60) + "\n");
+
+    // Step 1: Search with SerpAPI
+    console.log("🔍 Step 1: Searching web with SerpAPI...");
     const searchResults = await searchWeb(
       `${topic} South Africa tourism travel ${currentYear}`,
       5
     );
+    console.log(`✅ Found ${searchResults.length} search results`);
+    console.log('📊 SERP Results:', JSON.stringify(searchResults, null, 2));
 
-    // Step 2: Related Tours
-    console.log("🎯 Finding related tours...");
+    // Step 2: Scrape full content from top URLs using Firecrawl
+    console.log("\n🔥 Step 2: Scraping full content with Firecrawl...");
+    const urlsToScrape = searchResults.map(r => r.link).slice(0, 3);
+    console.log(`📋 URLs to scrape (top 3):`, urlsToScrape);
+
+    const scrapedContent = await scrapeForResearch(urlsToScrape, 3);
+    console.log(`✅ Scraped content length: ${scrapedContent.length} chars`);
+    console.log('📄 Scraped Content Preview:', scrapedContent.slice(0, 500) + '...\n');
+
+    // Step 3: Find Related Tours
+    console.log("🎯 Step 3: Finding related tours in database...");
     const relatedTours = await db.tour.findMany({
       where: {
         OR: [
@@ -343,10 +359,8 @@ export const generateBlogPost = async (params: GenerateBlogParams) => {
       select: { id: true, title: true, description: true, priceFrom: true },
       take: 3,
     });
-
-    const researchContext = searchResults
-      .map((r, i) => `[Source ${i + 1}] ${r.title}: ${r.snippet}`)
-      .join("\n\n");
+    console.log(`✅ Found ${relatedTours.length} related tours`);
+    console.log('🎯 Related Tours:', JSON.stringify(relatedTours, null, 2));
 
     const tourContext = relatedTours
       .map((t) => {
@@ -360,164 +374,160 @@ export const generateBlogPost = async (params: GenerateBlogParams) => {
     const wordCount =
       length === "short" ? 500 : length === "medium" ? 1000 : 2000;
 
-    // Step 3: Generate Blog Content
-    console.log("✍️ Generating blog post...");
+    // Step 4: Generate Blog Content with AI
+    console.log("\n✍️ Step 4: Generating blog post with AI...");
+    console.log(`📝 Target word count: ${wordCount}`);
+    console.log(`🎨 Tone: ${tone}`);
+    console.log(`👥 Audience: ${targetAudience || "General travelers"}\n`);
 
-    const systemPrompt = `You are an expert travel content writer for Vakashaa.com - South Africa's premier platform connecting travelers with trusted local tour operators.
+    const systemPrompt = `You are an expert travel content writer specializing in Southern African tourism.
 
-BRAND IDENTITY:
-- Vakashaa.com: SA platform for authentic Southern African travel experiences
-- Mission: Connect travelers with vetted South African tour operators
-- Value: Local expertise, authentic experiences, direct bookings
-- Region: Southern Africa (SA, Botswana, Namibia, Zimbabwe, Zambia, Mozambique, etc)
-
-WRITING STYLE - AVOID AI TELLS:
-❌ NEVER use em dashes (—) - use commas, periods, or semicolons instead
-❌ NEVER use phrases like "delve into", "realm of", "landscape of", "tapestry"
+WRITING STYLE - SOUND HUMAN, NOT AI:
+❌ NEVER use em dashes (—) - use commas, periods, or semicolons
+❌ NEVER use phrases: "delve into", "realm of", "landscape of", "tapestry", "unveil", "discover the secrets"
 ❌ NEVER start sentences with "Imagine" more than once
 ❌ AVOID overuse of colons (:) in sentences
 ❌ AVOID starting paragraphs with "Whether you're..." or "From... to..."
 ❌ AVOID listing three examples separated by commas constantly
 ❌ NO flowery, overly poetic language - be direct and practical
+❌ AVOID excessive adjectives stacked together
 
 ✅ DO use short, punchy sentences mixed with longer ones
-✅ DO write like a human travel writer - conversational but authoritative
-✅ DO use contractions (you'll, it's, don't) naturally
+✅ DO write conversationally but with authority
+✅ DO use contractions naturally (you'll, it's, don't)
 ✅ DO vary sentence structure and length
 ✅ DO be specific and concrete, not vague and abstract
+✅ DO write like a travel journalist, not a marketing copywriter
 
 Base Tone: ${tone}
-Always: Warm, inspiring, and action-oriented
+Always: Warm, inspiring, action-oriented, helpful
 Audience: ${targetAudience || "Travelers seeking authentic Southern African experiences"}
 Length: ~${wordCount} words
 Current Year: ${currentYear}
 
-CONTENT STRUCTURE (Follow this flow but create REAL, engaging headings):
+CONTENT STRUCTURE (Use natural, engaging headings - NO generic placeholders):
 
-Section 1 - Opening Hook:
-<h2>[Create an engaging, benefit-driven H2 about the experience]</h2>
-<p>Paint a vivid picture. Make readers feel they're already there. Start with sensory details.</p>
+Opening Hook (1-2 paragraphs):
+<h2>[Engaging H2 - benefit-driven, specific to topic]</h2>
+<p>Start with sensory details or a compelling scene. Make it immediate and vivid. No fluff.</p>
 
-Section 2 - Main Content:
-<h2>[Topic-specific H2 highlighting what makes this experience special]</h2>
-<p>Deep dive into the experience. Include specific places, details, what travelers will see/do.</p>
+Main Content (3-4 paragraphs):
+<h2>[Specific H2 about what makes this experience unique]</h2>
+<p>Deep dive. Be specific: actual places, real details, concrete information. What will travelers actually see and do?</p>
 
-Section 3 - Why Book Local:
-<h2>Why Book with Local South African Operators</h2>
-<p>Explain Vakashaa.com value. Mention safety, expertise, authentic experiences, local connections.</p>
-
-Section 4 - Practical Guide:
-<h2>Planning Your [Topic] Adventure</h2>
+Practical Information:
+<h2>Planning Your [Specific Topic] Trip</h2>
 <h3>Best Time to Visit</h3>
-<p>Specific months, weather conditions, crowd levels, seasons...</p>
+<p>Actual months, weather, crowd levels, specific seasons. No vague advice.</p>
+
 <h3>What to Expect & Costs</h3>
-<p>Realistic ZAR pricing with ranges. What's included, duration, value breakdown...</p>
-<h3>Insider Tips from Local Operators</h3>
-<p>Specific advice only South African guides would know. Be concrete and useful...</p>
+<p>Real ZAR prices with ranges. What's included. Actual durations. Be helpful.</p>
 
-Section 5 - Booking:
-<h2>Book Your [Topic] Experience Today</h2>
-<p>How Vakashaa.com connects travelers with operators. Natural CTA.</p>
+<h3>Tips from Local Guides</h3>
+<p>Specific insider advice. Details only locals know. Practical and useful.</p>
 
-Section 6 - FAQ:
-<h2>Frequently Asked Questions</h2>
-<h3>[Actual specific question about the topic]</h3>
-<p>Helpful answer...</p>
-[Create 4-5 real questions travelers would ask]
+FAQ (4-5 questions):
+<h2>Common Questions</h2>
+<h3>[Real, specific question travelers ask]</h3>
+<p>Direct, helpful answer.</p>
 
-Final CTA:
-<p><strong>Ready to [specific experience]? Browse [topic]-related tours on Vakashaa.com and connect with expert South African operators today.</strong></p>
+HEADING RULES:
+✅ Make every heading specific to the topic
+✅ Use real place names and details
+✅ Be benefit-driven
+❌ NEVER use generic placeholders like "Introduction" or "[Main Topic]"
 
-CRITICAL: Every heading must be REAL and SPECIFIC to the topic. Never use placeholder text like "Captivating Introduction" or "[Main Topic]" - write actual engaging headings!
+GOOD EXAMPLES:
+✅ "Why Kruger Should Be Your First Safari"
+✅ "Best Months for Wine Tasting in Stellenbosch"
+✅ "What a 3-Day Garden Route Trip Actually Costs"
 
-GOOD HEADING EXAMPLES:
-✅ "Why Kruger National Park Should Be Your First Safari"
-✅ "Discover Cape Town's Hidden Wine Valleys"
-✅ "The Ultimate Guide to Victoria Falls Adventures"
-
-BAD HEADING EXAMPLES:
-❌ "Captivating Introduction"
-❌ "[Main Topic] - An Unforgettable Experience"
-❌ "Local Insights"
-
-Make every heading specific, benefit-driven, and engaging!
-
-BRAND INTEGRATION (Natural, never forced):
-- Mention "Vakashaa.com" exactly 2-3 times in context
-- Say "South African operators" or "local tour operators" 3-4 times
-- Include 2 clear but natural CTAs
-- Position Vakashaa as the trusted connection point
+BAD EXAMPLES:
+❌ "Introduction to [Topic]"
+❌ "Exploring the Wonders"
+❌ "Getting Started"
 
 SEO OPTIMIZATION:
 - Target Keywords: ${keywords.length > 0 ? keywords.join(", ") : "Southern Africa, tourism, travel"}
+- Use keywords naturally - never stuff
 - Include specific locations (cities, parks, landmarks)
-- Use keywords naturally - NEVER stuff
-- H2 headings should be benefit-driven and include keywords where natural
+- H2/H3 structure for readability
+- Meta descriptions under 160 chars
 
-COST GUIDELINES (Current year: ${currentYear}):
+PRICING (${currentYear} rates):
 - Always in South African Rand (ZAR)
-- Realistic ${currentYear} prices: Budget (R2K-5K), Mid (R5K-15K), Luxury (R15K+)
+- Budget: R2K-5K
+- Mid-range: R5K-15K
+- Luxury: R15K+
 - Show value, not just price
-- Example: "from R4,500 per person for a 3-day experience"
+- Example: "from R4,500 per person for 3 days"
 
-AUTHENTICITY REQUIREMENTS:
+AUTHENTICITY:
 - Reference REAL places (actual parks, cities, routes)
 - Include SPECIFIC details only locals would know
-- Mention actual seasons, animals, landmarks
+- Mention actual seasons, conditions, logistics
 - Show expertise through specificity
-- Avoid generic travel advice
+- No generic travel advice
 
 OUTPUT AS JSON:
 {
   "title": "Under 60 chars, compelling, location-specific",
   "slug": "lowercase-with-hyphens-seo-friendly",
-  "excerpt": "Exactly 150-160 chars describing experience + mention Vakashaa.com",
+  "excerpt": "150-160 chars describing the experience",
   "content": "Complete HTML following structure above",
-  "metaTitle": "Under 60 chars, includes location + Vakashaa",
-  "metaDescription": "150-160 chars, includes CTA + Vakashaa.com",
-  "keywords": ["primary keyword", "southern africa", "specific location", "vakashaa", "tour type", "secondary keyword"],
+  "metaTitle": "Under 60 chars, includes main keyword",
+  "metaDescription": "150-160 chars with clear value proposition",
+  "keywords": ["primary keyword", "southern africa", "specific location", "tour type", "secondary keyword"],
   "featuredImageSuggestion": {
-    "description": "Vivid description of ideal featured image for this blog (e.g., 'Golden sunset over Kruger savanna with elephants silhouetted')",
-    "searchQuery": "Unsplash/stock photo search query (e.g., 'kruger sunset elephants')",
-    "altText": "SEO-optimized alt text for the image"
+    "description": "Specific description of ideal featured image",
+    "searchQuery": "Search query for stock photos",
+    "altText": "SEO-optimized alt text"
   }
 }
 
-CRITICAL: Write as an expert who LIVES in Southern Africa. Be specific, be authentic, be inspiring. Drive value through local expertise, not sales pitches.
+CRITICAL RULES:
+- Write as a travel expert who lives in Southern Africa
+- Be specific, authentic, inspiring
+- Provide genuine value through local knowledge
+- Keep it real, practical, and human
+- No marketing fluff or sales pitches
 
 WRITE LIKE A HUMAN:
-Bad (AI): "Whether you're a seasoned traveler or first-time visitor—Kruger offers something for everyone."
-Good (Human): "First safari? Kruger's the perfect place to start. Seasoned safari-goer? You'll still find hidden corners that surprise you."
+Bad (AI): "Whether you're a seasoned traveler or first-time visitor, this destination offers something for everyone."
+Good (Human): "First time here? You'll love it. Been before? There's always something new to find."
 
-Bad (AI): "Delve into the realm of wildlife where the tapestry of nature unfolds."
-Good (Human): "Watch elephants at sunrise. It never gets old."
+Bad (AI): "Delve into the realm of wildlife where nature's tapestry unfolds."
+Good (Human): "Watch elephants at sunrise. It never gets old."`;
 
-Keep it real, keep it practical, keep it human.`;
+    const userPrompt = `Write a compelling, SEO-optimized blog post about: "${topic}"
 
-    const userPrompt = `Create an engaging, SEO-optimized blog post about: "${topic}"
+RESEARCH DATA (Use this for accuracy and ${currentYear} trends):
+${scrapedContent}
 
-CURRENT RESEARCH (Use for accuracy and trends in ${currentYear}):
-${researchContext}
+${relatedTours.length > 0 ? `\nRELATED TOUR OPTIONS (Reference naturally if relevant):\n${tourContext}\n` : ""}
 
-${relatedTours.length > 0 ? `\nAVAILABLE TOURS ON VAKASHAA.COM (Reference naturally):\n${tourContext}\n` : ""}
+${keywords.length > 0 ? `TARGET KEYWORDS (integrate naturally): ${keywords.join(", ")}\n` : ""}
 
-${keywords.length > 0 ? `TARGET KEYWORDS (Use naturally): ${keywords.join(", ")}\n` : ""}
-
-YOUR MISSION:
+YOUR GOALS:
 1. Inspire travelers to experience "${topic}" in Southern Africa
-2. Position Vakashaa.com as the trusted platform to book with local experts
-3. Provide genuinely helpful, practical information for ${currentYear}
-4. Show why South African operators deliver superior experiences
-5. Drive organic traffic through valuable, SEO-optimized content
+2. Provide genuinely helpful, practical information for ${currentYear}
+3. Show local expertise through specific details
+4. Drive organic traffic through valuable, SEO-optimized content
+5. Be helpful first, promotional never
 
 FOCUS ON:
 - What makes "${topic}" uniquely Southern African
-- Specific details that prove local expertise
-- Practical costs, timing, preparation tips (accurate for ${currentYear})
-- Why booking with local operators through Vakashaa.com is the smart choice
-- Natural CTAs: "Explore ${topic} tours on Vakashaa.com"
+- Specific details that prove local knowledge
+- Practical costs, timing, preparation (accurate for ${currentYear})
+- Real insider tips from local perspective
+- Honest, helpful advice
 
-Remember: Be inspiring but practical, authoritative but approachable, promotional but genuinely helpful. Make readers excited about Southern Africa AND confident that Vakashaa.com connects them with the best local operators to experience it.`;
+Remember: Be inspiring but practical. Authoritative but approachable. Informative but never boring. Write like you're giving advice to a friend planning their trip.`;
+
+    console.log('🤖 Sending to AI...');
+    console.log('System Prompt Length:', systemPrompt.length, 'chars');
+    console.log('User Prompt Length:', userPrompt.length, 'chars');
+    console.log('Research Content Length:', scrapedContent.length, 'chars\n');
 
     const completion = await azureOpenAI.chat.completions.create({
       model: DEPLOYMENT_NAME,
@@ -533,16 +543,29 @@ Remember: Be inspiring but practical, authoritative but approachable, promotiona
     const generatedContent = completion.choices[0]?.message?.content;
 
     if (!generatedContent) {
+      console.error("❌ AI returned empty content");
       return response({
         success: false,
         error: { code: 500, message: "Failed to generate content from AI." },
       });
     }
 
+    console.log('✨ AI Response Length:', generatedContent.length, 'chars');
+    console.log('📄 Raw AI Response Preview:', generatedContent.slice(0, 300) + '...\n');
+
     const blogData: GeneratedBlog = JSON.parse(generatedContent);
     blogData.relatedTourIds = relatedTours.map((t) => t.id);
 
-    console.log("✅ Blog post generated successfully!");
+    console.log('📦 Parsed Blog Data:');
+    console.log('   - Title:', blogData.title);
+    console.log('   - Slug:', blogData.slug);
+    console.log('   - Content Length:', blogData.content.length, 'chars');
+    console.log('   - Keywords:', blogData.keywords.join(', '));
+    console.log('   - Related Tours:', blogData.relatedTourIds.length);
+
+    console.log("\n" + "=".repeat(60));
+    console.log("✅ BLOG POST GENERATED SUCCESSFULLY!");
+    console.log("=".repeat(60) + "\n");
 
     return response({
       success: true,
@@ -550,7 +573,11 @@ Remember: Be inspiring but practical, authoritative but approachable, promotiona
       data: { blogData },
     });
   } catch (error: any) {
-    console.error("Error generating blog post:", error);
+    console.error("\n" + "=".repeat(60));
+    console.error("❌ BLOG GENERATION FAILED");
+    console.error("=".repeat(60));
+    console.error("Error:", error);
+    console.error("Stack:", error.stack);
     return response({
       success: false,
       error: {

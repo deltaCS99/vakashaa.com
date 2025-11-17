@@ -36,7 +36,10 @@ enum QuoteStatus {
   Pending // Awaiting operator response
   Quoted // Operator sent quote
   Accepted // User accepted, awaiting payment
-  Paid // Payment received - this is the confirmed booking
+  Paid // Payment received
+  Completed // Tour happened & confirmed
+  Disputed // Customer disputed completion
+  Refunded // Money returned to customer
   Rejected // User rejected quote
   Expired // Quote validity expired
   Cancelled // Cancelled after acceptance
@@ -46,6 +49,17 @@ enum BlogStatus {
   Draft
   Published
   Archived
+}
+
+enum BankVerificationStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+enum IdDocumentType {
+  ID // South African ID
+  Passport // International Passport
 }
 
 // =====================================================
@@ -135,6 +149,7 @@ model User {
   quoteRequests         QuoteRequest[]
   operatorProfile       OperatorProfile[]
   blogPosts             BlogPost[]
+  reviews               Review[]
 
   @@map("users")
 }
@@ -147,17 +162,49 @@ model OperatorProfile {
   id               String       @id @default(cuid())
   userId           String       @unique @map("user_id")
   businessName     String       @map("business_name")
-  businessPhone    String?      @map("business_phone")
-  businessWhatsApp String?      @map("business_whatsapp")
-  description      String?
+  businessPhone    String       @map("business_phone")
+  businessWhatsApp String       @map("business_whatsapp")
+  description      String?      @db.Text
   operatorType     OperatorType @default(TourOperator) @map("operator_type")
   serviceType      ServiceType  @default(All) @map("service_type")
   isApproved       Boolean      @default(false) @map("is_approved")
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tours Tour[]
+  // Bank details for manual payouts
+  bankName      String? @map("bank_name")
+  bankCode      String? @map("bank_code")
+  accountNumber String? @map("account_number")
+  accountName   String? @map("account_name")
+
+  // Bank verification (manual admin review)
+  bankVerificationStatus      BankVerificationStatus? @map("bank_verification_status")
+  bankVerificationDocument    String?                 @map("bank_verification_document") // Bank statement/letter URL
+  bankVerificationNotes       String?                 @map("bank_verification_notes") @db.Text
+  bankVerificationSubmittedAt DateTime?               @map("bank_verification_submitted_at")
+  bankVerificationReviewedAt  DateTime?               @map("bank_verification_reviewed_at")
+  bankVerificationReviewedBy  String?                 @map("bank_verification_reviewed_by") // Admin user ID
+
+  // Operator verification documents (for initial approval)
+  companyRegistrationDocument      String?         @map("company_registration_document") // CIPC certificate URL
+  idDocument                       String?         @map("id_document") // ID/Passport scan URL
+  idDocumentType                   IdDocumentType? @map("id_document_type") // "ID" or "Passport"
+  serviceAgreement                 String?         @map("service_agreement") // Signed agreement PDF URL
+  serviceAgreementSignedAt         DateTime?       @map("service_agreement_signed_at")
+  verificationDocumentsSubmittedAt DateTime?       @map("verification_documents_submitted_at")
+
+  companyRegistrationNumber String? @map("company_registration_number")
+  physicalAddress           String? @map("physical_address")
+  capacity                  String? // Director, Owner, Manager, etc.
+
+  // Performance metrics
+  totalReviews  Int    @default(0) @map("total_reviews")
+  averageRating Float? @map("average_rating")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tours   Tour[]
+  reviews Review[]
 
   @@map("operator_profiles")
 }
@@ -193,7 +240,7 @@ model Tour {
   pickupLocations Json? @map("pickup_locations") // [{ point: "Hotel A", time: "08:00" }]
   maxCapacity     Int?  @map("max_capacity")
 
-  // Inclusions / Exclusions (general tour info - simple list)
+  // Inclusions / Exclusions
   inclusions String[] @default([])
   exclusions String[] @default([])
 
@@ -225,10 +272,11 @@ model Tour {
 // =====================================================
 
 model QuoteRequest {
-  id        String @id @default(cuid())
-  reference String @unique // QR-xxxxx for quotes, BK-xxxxx when paid
-  userId    String @map("user_id")
-  tourId    String @map("tour_id")
+  id        String      @id @default(cuid())
+  reference String      @unique // QR-xxxxx for quotes, BK-xxxxx when paid
+  userId    String      @map("user_id")
+  tourId    String      @map("tour_id")
+  status    QuoteStatus @default(Pending)
 
   // Request Details
   preferredDate String  @map("preferred_date")
@@ -247,9 +295,6 @@ model QuoteRequest {
   // Requirements
   specialRequirements String? @map("special_requirements") @db.Text
 
-  // Status
-  status QuoteStatus @default(Pending)
-
   // Operator's Quote (null until quoted)
   quotedPrice        Int?      @map("quoted_price")
   quotedInclusions   Json?     @map("quoted_inclusions") // [{ item: "Accommodation", price: null }, { item: "Upgrade", price: 80000 }]
@@ -258,6 +303,10 @@ model QuoteRequest {
   quoteValidityHours Int?      @map("quote_validity_hours")
   quotedAt           DateTime? @map("quoted_at")
   quoteExpiresAt     DateTime? @map("quote_expires_at")
+
+  // Confirmed tour date (agreed upon after quote acceptance)
+  confirmedTourDate    DateTime? @map("confirmed_tour_date")
+  confirmedTourEndDate DateTime? @map("confirmed_tour_end_date")
 
   // Quote Revisions
   revisionCount Int       @default(0) @map("revision_count")
@@ -268,6 +317,22 @@ model QuoteRequest {
   paymentReference String?   @map("payment_reference")
   paidAt           DateTime? @map("paid_at")
   paidAmount       Int?      @map("paid_amount")
+
+  // Tour Completion Tracking
+  tourCompletedByOperator Boolean?  @default(false) @map("tour_completed_by_operator")
+  tourCompletedAt         DateTime? @map("tour_completed_at")
+  tourConfirmedByCustomer Boolean?  @default(false) @map("tour_confirmed_by_customer")
+  tourConfirmedAt         DateTime? @map("tour_confirmed_at")
+
+  // Dispute Handling
+  disputeReason     String?   @map("dispute_reason") @db.Text
+  disputeCreatedAt  DateTime? @map("dispute_created_at")
+  disputeResolvedAt DateTime? @map("dispute_resolved_at")
+
+  // Refund
+  refundedAt   DateTime? @map("refunded_at")
+  refundAmount Int?      @map("refund_amount") // Can be partial or full
+  refundReason String?   @map("refund_reason") @db.Text
 
   // Response Tracking
   acceptedAt         DateTime? @map("accepted_at")
@@ -283,6 +348,7 @@ model QuoteRequest {
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   tour     Tour           @relation(fields: [tourId], references: [id], onDelete: Cascade)
   messages QuoteMessage[]
+  review   Review?
 
   @@index([userId, status])
   @@index([tourId, status])
@@ -297,17 +363,42 @@ model QuoteRequest {
 // =====================================================
 
 model QuoteMessage {
-  id             String   @id @default(cuid())
-  quoteRequestId String   @map("quote_request_id")
-  senderId       String   @map("sender_id")
-  senderType     String   @map("sender_type") // "customer" or "operator"
-  message        String   @db.Text
-  createdAt      DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  quoteRequestId String    @map("quote_request_id")
+  senderId       String    @map("sender_id")
+  senderType     String    @map("sender_type") // "customer" or "operator"
+  message        String    @db.Text
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   quoteRequest QuoteRequest @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
 
   @@index([quoteRequestId])
   @@map("quote_messages")
+}
+
+// =====================================================
+// REVIEWS (Minimal MVP)
+// =====================================================
+
+model Review {
+  id                String @id @default(cuid())
+  quoteRequestId    String @unique @map("quote_request_id")
+  userId            String @map("user_id")
+  operatorProfileId String @map("operator_profile_id")
+
+  rating  Int // 1-5 stars (required)
+  comment String? @db.Text // Optional text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  quoteRequest    QuoteRequest    @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id])
+  operatorProfile OperatorProfile @relation(fields: [operatorProfileId], references: [id])
+
+  @@index([operatorProfileId])
+  @@index([rating])
+  @@map("reviews")
 }
 
 // =====================================================

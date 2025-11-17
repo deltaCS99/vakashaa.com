@@ -2,13 +2,54 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireApprovedOperator } from "@/lib/operator";
+import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { QuoteStatus } from "@prisma/client";
 
-export const getOperatorDashboardStats = async () => {
+export const getOperatorDashboardStats = async (profileId?: string) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: {
+          code: 401,
+          message: "Unauthorized",
+        },
+      });
+    }
+
+    // Get the operator profile (specific or first)
+    let operatorProfile;
+
+    if (profileId) {
+      operatorProfile = await db.operatorProfile.findUnique({
+        where: {
+          id: profileId,
+          userId: user.id, // Security: ensure profile belongs to user
+        },
+      });
+    } else {
+      operatorProfile = await db.operatorProfile.findFirst({
+        where: {
+          userId: user.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+    }
+
+    if (!operatorProfile) {
+      return response({
+        success: false,
+        error: {
+          code: 404,
+          message: "Operator profile not found",
+        },
+      });
+    }
 
     // Get all tours for this operator
     const tours = await db.tour.findMany({
@@ -49,7 +90,7 @@ export const getOperatorDashboardStats = async () => {
 
     // Calculate acceptance rate (accepted + paid / total quoted)
     const totalQuotedOrAccepted = allQuotes.filter((q) =>
-      [QuoteStatus.Quoted, QuoteStatus.Accepted, QuoteStatus.Paid as QuoteStatus].includes(q.status)
+      ([QuoteStatus.Quoted, QuoteStatus.Accepted, QuoteStatus.Paid] as QuoteStatus[]).includes(q.status)
     ).length;
     const totalAcceptedOrPaid = acceptedQuotes + confirmedBookings;
     const acceptanceRate =

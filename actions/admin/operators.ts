@@ -5,10 +5,12 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
+import { sendOperatorWhatsAppNotification, WHATSAPP_TEMPLATES } from "@/lib/whatsapp";
+
 
 // Get all operators with filters
 export const getOperators = async (params?: {
-    status?: "all" | "pending" | "approved" | "rejected";
+    status?: "all" | "pending" | "approved" | "bank_pending";
     search?: string;
     page?: number;
     limit?: number;
@@ -28,13 +30,21 @@ export const getOperators = async (params?: {
 
         const { status = "all", search, page = 1, limit = 20 } = params || {};
 
-        // Build where clause
+        // Build where clause based on status
         const where: any = {};
 
         if (status === "pending") {
+            // Submitted for review but not approved
             where.isApproved = false;
+            where.verificationDocumentsSubmittedAt = { not: null };
         } else if (status === "approved") {
+            // Approved with bank approved
             where.isApproved = true;
+            where.bankVerificationStatus = "Approved";
+        } else if (status === "bank_pending") {
+            // Approved but bank pending
+            where.isApproved = true;
+            where.bankVerificationStatus = "Pending";
         }
 
         if (search) {
@@ -59,11 +69,6 @@ export const getOperators = async (params?: {
                         name: true,
                         email: true,
                         image: true,
-                    },
-                },
-                _count: {
-                    select: {
-                        tours: true,
                     },
                 },
             },
@@ -164,7 +169,7 @@ export const getOperatorById = async (operatorId: string) => {
     }
 };
 
-// Approve operator
+// Approve operator (initial approval - docs + bank together)
 export const approveOperator = async (operatorId: string) => {
     try {
         const user = await currentUser();
@@ -203,11 +208,30 @@ export const approveOperator = async (operatorId: string) => {
             });
         }
 
-        // Update operator status
+        // Check all required documents
+        if (
+            !operator.companyRegistrationDocument ||
+            !operator.idDocument ||
+            !operator.serviceAgreement ||
+            !operator.bankVerificationDocument
+        ) {
+            return response({
+                success: false,
+                error: {
+                    code: 400,
+                    message: "Operator has not submitted all required documents.",
+                },
+            });
+        }
+
+        // Approve everything at once
         const updatedOperator = await db.operatorProfile.update({
             where: { id: operatorId },
             data: {
                 isApproved: true,
+                bankVerificationStatus: "Approved",
+                bankVerificationReviewedAt: new Date(),
+                bankVerificationReviewedBy: user.id,
             },
         });
 
@@ -215,6 +239,7 @@ export const approveOperator = async (operatorId: string) => {
 
         revalidatePath("/admin/operators");
         revalidatePath("/admin/dashboard");
+        revalidatePath(`/admin/operators/${operatorId}`);
 
         return response({
             success: true,
@@ -236,8 +261,8 @@ export const approveOperator = async (operatorId: string) => {
     }
 };
 
-// Reject/Revoke operator
-export const rejectOperator = async (operatorId: string) => {
+// Reject operator (initial rejection)
+export const rejectOperator = async (operatorId: string, reason: string) => {
     try {
         const user = await currentUser();
 
@@ -270,22 +295,25 @@ export const rejectOperator = async (operatorId: string) => {
             where: { id: operatorId },
             data: {
                 isApproved: false,
+                bankVerificationStatus: "Rejected",
+                bankVerificationNotes: reason,
+                bankVerificationReviewedAt: new Date(),
+                bankVerificationReviewedBy: user.id,
             },
         });
 
-        // TODO: Send rejection/revocation email to operator
+        // TODO: Send rejection email to operator with reason
 
         revalidatePath("/admin/operators");
         revalidatePath("/admin/dashboard");
+        revalidatePath(`/admin/operators/${operatorId}`);
 
         return response({
             success: true,
             code: 200,
             data: {
                 operator: updatedOperator,
-                message: operator.isApproved
-                    ? "Operator approval revoked."
-                    : "Operator rejected.",
+                message: "Operator application rejected.",
             },
         });
     } catch (error: any) {
@@ -300,15 +328,160 @@ export const rejectOperator = async (operatorId: string) => {
     }
 };
 
-// Update operator details
-export const updateOperator = async (params: {
+// Approve bank (re-verification after operator edits bank details)
+export const approveBankDetails = async (operatorId: string) => {
+    try {
+        const user = await currentUser();
+
+        if (!user || user.role !== "Admin") {
+            return response({
+                success: false,
+                error: {
+                    code: 403,
+                    message: "Unauthorized. Admin access required.",
+                },
+            });
+        }
+
+        const operator = await db.operatorProfile.findUnique({
+            where: { id: operatorId },
+        });
+
+        if (!operator) {
+            return response({
+                success: false,
+                error: {
+                    code: 404,
+                    message: "Operator not found.",
+                },
+            });
+        }
+
+        if (!operator.isApproved) {
+            return response({
+                success: false,
+                error: {
+                    code: 400,
+                    message: "Operator must be approved first.",
+                },
+            });
+        }
+
+        const updatedOperator = await db.operatorProfile.update({
+            where: { id: operatorId },
+            data: {
+                bankVerificationStatus: "Approved",
+                bankVerificationReviewedAt: new Date(),
+                bankVerificationReviewedBy: user.id,
+                bankVerificationNotes: null, // Clear previous rejection notes
+            },
+        });
+
+        // TODO: Send bank approval email
+
+        revalidatePath("/admin/operators");
+        revalidatePath("/admin/dashboard");
+        revalidatePath(`/admin/operators/${operatorId}`);
+
+        return response({
+            success: true,
+            code: 200,
+            data: {
+                operator: updatedOperator,
+                message: "Bank details approved successfully.",
+            },
+        });
+    } catch (error: any) {
+        console.error("Error approving bank details:", error);
+        return response({
+            success: false,
+            error: {
+                code: 500,
+                message: "Failed to approve bank details.",
+            },
+        });
+    }
+};
+
+// Reject bank (re-verification)
+export const rejectBankDetails = async (operatorId: string, reason: string) => {
+    try {
+        const user = await currentUser();
+
+        if (!user || user.role !== "Admin") {
+            return response({
+                success: false,
+                error: {
+                    code: 403,
+                    message: "Unauthorized. Admin access required.",
+                },
+            });
+        }
+
+        const operator = await db.operatorProfile.findUnique({
+            where: { id: operatorId },
+        });
+
+        if (!operator) {
+            return response({
+                success: false,
+                error: {
+                    code: 404,
+                    message: "Operator not found.",
+                },
+            });
+        }
+
+        if (!operator.isApproved) {
+            return response({
+                success: false,
+                error: {
+                    code: 400,
+                    message: "Operator must be approved first.",
+                },
+            });
+        }
+
+        const updatedOperator = await db.operatorProfile.update({
+            where: { id: operatorId },
+            data: {
+                bankVerificationStatus: "Rejected",
+                bankVerificationNotes: reason,
+                bankVerificationReviewedAt: new Date(),
+                bankVerificationReviewedBy: user.id,
+            },
+        });
+
+        // TODO: Send bank rejection email
+
+        revalidatePath("/admin/operators");
+        revalidatePath("/admin/dashboard");
+        revalidatePath(`/admin/operators/${operatorId}`);
+
+        return response({
+            success: true,
+            code: 200,
+            data: {
+                operator: updatedOperator,
+                message: "Bank details rejected.",
+            },
+        });
+    } catch (error: any) {
+        console.error("Error rejecting bank details:", error);
+        return response({
+            success: false,
+            error: {
+                code: 500,
+                message: "Failed to reject bank details.",
+            },
+        });
+    }
+};
+
+export const sendOperatorWhatsApp = async (params: {
     operatorId: string;
-    businessName?: string;
-    businessPhone?: string | null;
-    businessWhatsApp?: string | null;
-    description?: string | null;
-    operatorType?: "TourOperator" | "DMC";
-    serviceType?: "Inbound" | "Domestic" | "Outbound" | "All";
+    message: string;
+    type: "quality_control" | "rejection" | "bank_rejection" | "approval" | "general";
 }) => {
     try {
         const user = await currentUser();
@@ -323,122 +496,43 @@ export const updateOperator = async (params: {
             });
         }
 
-        const operator = await db.operatorProfile.findUnique({
-            where: { id: params.operatorId },
+        // Send WhatsApp message via Twilio
+        const result = await sendOperatorWhatsAppNotification({
+            operatorId: params.operatorId,
+            message: params.message,
+            type: params.type,
         });
 
-        if (!operator) {
-            return response({
-                success: false,
-                error: {
-                    code: 404,
-                    message: "Operator not found.",
-                },
-            });
-        }
-
-        // Update operator
-        const updatedOperator = await db.operatorProfile.update({
-            where: { id: params.operatorId },
-            data: {
-                businessName: params.businessName,
-                businessPhone: params.businessPhone,
-                businessWhatsApp: params.businessWhatsApp,
-                description: params.description,
-                operatorType: params.operatorType,
-                serviceType: params.serviceType,
-            },
-        });
-
-        revalidatePath("/admin/operators");
-        revalidatePath(`/admin/operators/${params.operatorId}`);
-        revalidatePath("/admin/dashboard");
-
-        return response({
-            success: true,
-            code: 200,
-            data: {
-                operator: updatedOperator,
-                message: "Operator updated successfully.",
-            },
-        });
-    } catch (error: any) {
-        console.error("Error updating operator:", error);
-        return response({
-            success: false,
-            error: {
-                code: 500,
-                message: "Failed to update operator.",
-            },
-        });
-    }
-};
-
-// Delete operator (and associated data)
-export const deleteOperator = async (operatorId: string) => {
-    try {
-        const user = await currentUser();
-
-        if (!user || user.role !== "Admin") {
-            return response({
-                success: false,
-                error: {
-                    code: 403,
-                    message: "Unauthorized. Admin access required.",
-                },
-            });
-        }
-
-        const operator = await db.operatorProfile.findUnique({
-            where: { id: operatorId },
-            include: {
-                tours: true,
-            },
-        });
-
-        if (!operator) {
-            return response({
-                success: false,
-                error: {
-                    code: 404,
-                    message: "Operator not found.",
-                },
-            });
-        }
-
-        // Check if operator has tours
-        if (operator.tours.length > 0) {
+        if (!result.success) {
             return response({
                 success: false,
                 error: {
                     code: 400,
-                    message: "Cannot delete operator with existing tours. Please remove tours first.",
+                    message: result.error || "Failed to send WhatsApp message",
                 },
             });
         }
 
-        // Delete operator profile
-        await db.operatorProfile.delete({
-            where: { id: operatorId },
-        });
+        // Log the notification (optional - for audit trail)
+        // You could create a notifications table to track sent messages
 
-        revalidatePath("/admin/operators");
-        revalidatePath("/admin/dashboard");
+        revalidatePath(`/admin/operators/${params.operatorId}`);
 
         return response({
             success: true,
             code: 200,
             data: {
-                message: "Operator deleted successfully.",
+                messageId: result.messageId,
+                message: "WhatsApp notification sent successfully",
             },
         });
     } catch (error: any) {
-        console.error("Error deleting operator:", error);
+        console.error("Error sending WhatsApp notification:", error);
         return response({
             success: false,
             error: {
                 code: 500,
-                message: "Failed to delete operator.",
+                message: "Failed to send WhatsApp notification.",
             },
         });
     }

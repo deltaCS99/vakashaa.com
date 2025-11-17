@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Calendar } from "lucide-react";
 import { respondToQuote } from "@/actions/operator/quotes";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 interface InclusionExclusion {
   item: string;
@@ -19,6 +20,8 @@ interface InclusionExclusion {
 
 interface ExistingQuote {
   quotedPrice: number;
+  confirmedTourDate: Date;
+  confirmedTourEndDate: Date;
   quotedInclusions: InclusionExclusion[];
   quotedExclusions: InclusionExclusion[];
   quotedTerms: string;
@@ -27,12 +30,14 @@ interface ExistingQuote {
 
 interface OperatorQuoteResponseFormProps {
   quoteRequestId: string;
+  preferredDate: string; // Customer's preferred date for reference
   existingQuote?: ExistingQuote;
   isRevision?: boolean;
 }
 
 export function OperatorQuoteResponseForm({
   quoteRequestId,
+  preferredDate,
   existingQuote,
   isRevision = false,
 }: OperatorQuoteResponseFormProps) {
@@ -42,6 +47,16 @@ export function OperatorQuoteResponseForm({
   // Form state
   const [quotedPrice, setQuotedPrice] = useState(
     existingQuote ? (existingQuote.quotedPrice / 100).toString() : ""
+  );
+  const [confirmedTourDate, setConfirmedTourDate] = useState(
+    existingQuote
+      ? format(new Date(existingQuote.confirmedTourDate), "yyyy-MM-dd")
+      : preferredDate
+  );
+  const [confirmedTourEndDate, setConfirmedTourEndDate] = useState(
+    existingQuote
+      ? format(new Date(existingQuote.confirmedTourEndDate), "yyyy-MM-dd")
+      : ""
   );
   const [inclusions, setInclusions] = useState<InclusionExclusion[]>(
     existingQuote?.quotedInclusions || [{ item: "", price: null }]
@@ -68,7 +83,6 @@ export function OperatorQuoteResponseForm({
   const updateInclusion = (index: number, field: keyof InclusionExclusion, value: any) => {
     const updated = [...inclusions];
     if (field === "price") {
-      // Convert to cents or null
       updated[index][field] = value ? Math.round(parseFloat(value) * 100) : null;
     } else {
       updated[index][field] = value;
@@ -90,7 +104,6 @@ export function OperatorQuoteResponseForm({
   const updateExclusion = (index: number, field: keyof InclusionExclusion, value: any) => {
     const updated = [...exclusions];
     if (field === "price") {
-      // Convert to cents or null
       updated[index][field] = value ? Math.round(parseFloat(value) * 100) : null;
     } else {
       updated[index][field] = value;
@@ -105,6 +118,21 @@ export function OperatorQuoteResponseForm({
     // Validation
     if (!quotedPrice || parseFloat(quotedPrice) <= 0) {
       toast.error("Please enter a valid quoted price");
+      return;
+    }
+
+    if (!confirmedTourDate) {
+      toast.error("Please select tour start date");
+      return;
+    }
+
+    if (!confirmedTourEndDate) {
+      toast.error("Please select tour end date");
+      return;
+    }
+
+    if (new Date(confirmedTourEndDate) <= new Date(confirmedTourDate)) {
+      toast.error("Tour end date must be after start date");
       return;
     }
 
@@ -123,6 +151,8 @@ export function OperatorQuoteResponseForm({
       const result = await respondToQuote({
         quoteRequestId,
         quotedPrice: Math.round(parseFloat(quotedPrice) * 100), // Convert to cents
+        confirmedTourDate,
+        confirmedTourEndDate,
         quotedInclusions: validInclusions,
         quotedExclusions: validExclusions,
         quotedTerms: terms.trim() || undefined,
@@ -145,6 +175,57 @@ export function OperatorQuoteResponseForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Customer's Preferred Date (Reference) */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 text-blue-900 mb-1">
+          <Calendar className="h-4 w-4" />
+          <span className="font-medium text-sm">Customer&apos;s Preferred Date</span>
+        </div>
+        <p className="text-blue-700 font-semibold">
+          {format(new Date(preferredDate), "MMMM dd, yyyy")}
+        </p>
+        <p className="text-xs text-blue-600 mt-1">
+          Use this as reference when setting tour dates
+        </p>
+      </div>
+
+      <Separator />
+
+      {/* Confirmed Tour Dates */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="tourStartDate">
+            Tour Start Date <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="tourStartDate"
+            type="date"
+            value={confirmedTourDate}
+            onChange={(e) => setConfirmedTourDate(e.target.value)}
+            min={format(new Date(), "yyyy-MM-dd")}
+            required
+          />
+          <p className="text-xs text-gray-500">When will the tour begin?</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="tourEndDate">
+            Tour End Date <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="tourEndDate"
+            type="date"
+            value={confirmedTourEndDate}
+            onChange={(e) => setConfirmedTourEndDate(e.target.value)}
+            min={confirmedTourDate || format(new Date(), "yyyy-MM-dd")}
+            required
+          />
+          <p className="text-xs text-gray-500">When will the tour end?</p>
+        </div>
+      </div>
+
+      <Separator />
+
       {/* Quoted Price */}
       <div className="space-y-2">
         <Label htmlFor="quotedPrice">

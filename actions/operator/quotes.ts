@@ -2,15 +2,41 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireApprovedOperator } from "@/lib/operator";
+import { getOperatorProfile } from "@/lib/operator";
+import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { QuoteStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 // Get all quote requests for operator's tours
-export const getOperatorQuoteRequests = async () => {
+export const getOperatorQuoteRequests = async (businessId?: string) => {
     try {
-        const operatorProfile = await requireApprovedOperator();
+        const user = await currentUser();
+
+        if (!user || user.role !== "Operator") {
+            return response({
+                success: false,
+                error: { code: 401, message: "Unauthorized" },
+            });
+        }
+
+        const operatorProfile = await getOperatorProfile(businessId);
+
+        if (!operatorProfile) {
+            return response({
+                success: false,
+                error: { code: 404, message: "Profile not found" },
+            });
+        }
+
+        // Only show quotes if operator is live
+        if (!operatorProfile.isApproved || operatorProfile.bankVerificationStatus !== "Approved") {
+            return response({
+                success: true,
+                code: 200,
+                data: { quoteRequests: [] },
+            });
+        }
 
         const quoteRequests = await db.quoteRequest.findMany({
             where: {
@@ -55,8 +81,8 @@ export const getOperatorQuoteRequests = async () => {
         return response({
             success: false,
             error: {
-                code: error.message.includes("pending approval") ? 403 : 500,
-                message: error.message || "Failed to fetch quote requests.",
+                code: 500,
+                message: "Failed to fetch quote requests.",
             },
         });
     }
@@ -65,13 +91,22 @@ export const getOperatorQuoteRequests = async () => {
 // Get single quote request details
 export const getOperatorQuoteRequestById = async (id: string) => {
     try {
-        const operatorProfile = await requireApprovedOperator();
+        const user = await currentUser();
+
+        if (!user || user.role !== "Operator") {
+            return response({
+                success: false,
+                error: { code: 401, message: "Unauthorized" },
+            });
+        }
 
         const quoteRequest = await db.quoteRequest.findFirst({
             where: {
                 id,
                 tour: {
-                    operatorProfileId: operatorProfile.id,
+                    operatorProfile: {
+                        userId: user.id,
+                    },
                 },
             },
             include: {
@@ -103,18 +138,32 @@ export const getOperatorQuoteRequestById = async (id: string) => {
             });
         }
 
+        const parsedQuoteRequest = {
+            ...quoteRequest,
+            quotedInclusions: quoteRequest.quotedInclusions
+                ? typeof quoteRequest.quotedInclusions === 'string'
+                    ? JSON.parse(quoteRequest.quotedInclusions)
+                    : quoteRequest.quotedInclusions
+                : null,
+            quotedExclusions: quoteRequest.quotedExclusions
+                ? typeof quoteRequest.quotedExclusions === 'string'
+                    ? JSON.parse(quoteRequest.quotedExclusions)
+                    : quoteRequest.quotedExclusions
+                : null,
+        };
+
         return response({
             success: true,
             code: 200,
-            data: { quoteRequest },
+            data: { quoteRequest: parsedQuoteRequest },
         });
     } catch (error: any) {
         console.error("Error fetching quote request:", error);
         return response({
             success: false,
             error: {
-                code: error.message.includes("pending approval") ? 403 : 500,
-                message: error.message || "Failed to fetch quote request.",
+                code: 500,
+                message: "Failed to fetch quote request.",
             },
         });
     }
@@ -123,6 +172,8 @@ export const getOperatorQuoteRequestById = async (id: string) => {
 interface RespondToQuoteParams {
     quoteRequestId: string;
     quotedPrice: number; // In cents
+    confirmedTourDate: string; // ISO date string
+    confirmedTourEndDate: string; // ISO date string
     quotedInclusions?: Array<{ item: string; price: number | null }>;
     quotedExclusions?: Array<{ item: string; price: number | null }>;
     quotedTerms?: string;
@@ -132,14 +183,23 @@ interface RespondToQuoteParams {
 // Respond to a quote request (or revise existing quote)
 export const respondToQuote = async (params: RespondToQuoteParams) => {
     try {
-        const operatorProfile = await requireApprovedOperator();
+        const user = await currentUser();
+
+        if (!user || user.role !== "Operator") {
+            return response({
+                success: false,
+                error: { code: 401, message: "Unauthorized" },
+            });
+        }
 
         // Verify quote belongs to operator's tour
         const quoteRequest = await db.quoteRequest.findFirst({
             where: {
                 id: params.quoteRequestId,
                 tour: {
-                    operatorProfileId: operatorProfile.id,
+                    operatorProfile: {
+                        userId: user.id,
+                    },
                 },
             },
         });
@@ -171,6 +231,31 @@ export const respondToQuote = async (params: RespondToQuoteParams) => {
             });
         }
 
+        // Validate dates
+        const tourStartDate = new Date(params.confirmedTourDate);
+        const tourEndDate = new Date(params.confirmedTourEndDate);
+        const now = new Date();
+
+        if (tourStartDate <= now) {
+            return response({
+                success: false,
+                error: {
+                    code: 400,
+                    message: "Tour start date must be in the future.",
+                },
+            });
+        }
+
+        if (tourEndDate <= tourStartDate) {
+            return response({
+                success: false,
+                error: {
+                    code: 400,
+                    message: "Tour end date must be after start date.",
+                },
+            });
+        }
+
         // Calculate expiry
         const quotedAt = new Date();
         const quoteExpiresAt = params.quoteValidityHours
@@ -183,6 +268,8 @@ export const respondToQuote = async (params: RespondToQuoteParams) => {
             data: {
                 status: QuoteStatus.Quoted,
                 quotedPrice: params.quotedPrice,
+                confirmedTourDate: tourStartDate,
+                confirmedTourEndDate: tourEndDate,
                 quotedInclusions: params.quotedInclusions || [],
                 quotedExclusions: params.quotedExclusions || [],
                 quotedTerms: params.quotedTerms,
@@ -223,14 +310,30 @@ export const sendOperatorMessage = async (
     message: string
 ) => {
     try {
-        const operatorProfile = await requireApprovedOperator();
+        const user = await currentUser();
+
+        if (!user || user.role !== "Operator") {
+            return response({
+                success: false,
+                error: { code: 401, message: "Unauthorized" },
+            });
+        }
 
         // Verify quote belongs to operator
         const quoteRequest = await db.quoteRequest.findFirst({
             where: {
                 id: quoteRequestId,
                 tour: {
-                    operatorProfileId: operatorProfile.id,
+                    operatorProfile: {
+                        userId: user.id,
+                    },
+                },
+            },
+            include: {
+                tour: {
+                    include: {
+                        operatorProfile: true,
+                    },
                 },
             },
         });
@@ -249,7 +352,7 @@ export const sendOperatorMessage = async (
         const quoteMessage = await db.quoteMessage.create({
             data: {
                 quoteRequestId,
-                senderId: operatorProfile.userId,
+                senderId: user.id!,
                 senderType: "operator",
                 message,
             },

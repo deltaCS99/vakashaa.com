@@ -92,7 +92,7 @@ export function OperatorRecentQuotes({ quotes }: OperatorRecentQuotesProps) {
   return (
     <div className="space-y-3">
       {quotes.map((quote) => {
-        const statusConfig = STATUS_CONFIG[quote.status];
+        const statusConfig = STATUS_CONFIG[quote.status] ;
         const StatusIcon = statusConfig.icon;
         const totalGuests = quote.adults + quote.children;
 

@@ -15,15 +15,21 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, Rocket } from "lucide-react";
 import { submitOperatorApplication } from "@/actions/operator/application";
 import { toast } from "sonner";
 
 interface OperatorApplicationFormProps {
     userId: string;
+    isDialog?: boolean; // If used in dialog (for adding additional businesses)
+    onSuccess?: () => void; // Callback for dialog mode
 }
 
-export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps) {
+export function OperatorApplicationForm({
+    userId,
+    isDialog = false,
+    onSuccess
+}: OperatorApplicationFormProps) {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -34,10 +40,7 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
     const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
     const [description, setDescription] = useState("");
     const [operatorType, setOperatorType] = useState<"TourOperator" | "DMC">("TourOperator");
-    const [serviceType, setServiceType] = useState<"Inbound" | "Domestic" | "Outbound" | "All">(
-        "All"
-    );
-    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [serviceType, setServiceType] = useState<"Inbound" | "Domestic" | "Outbound" | "All">("All");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,8 +51,8 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
             return;
         }
 
-        if (!acceptedTerms) {
-            toast.error("Please accept the terms and conditions");
+        if (!businessPhone.trim()) {
+            toast.error("Business phone is required");
             return;
         }
 
@@ -59,24 +62,29 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
             const result = await submitOperatorApplication({
                 userId,
                 businessName: businessName.trim(),
-                businessPhone: businessPhone.trim() || undefined,
+                businessPhone: businessPhone.trim(),
                 businessWhatsApp: whatsappSameAsPhone
-                    ? businessPhone.trim() || undefined
-                    : businessWhatsApp.trim() || undefined,
+                    ? businessPhone.trim()
+                    : businessWhatsApp.trim(),
                 description: description.trim() || undefined,
                 operatorType,
                 serviceType,
             });
 
             if (result.success) {
-                toast.success("Application submitted successfully!");
-                router.push("/operator/apply"); // Refresh to show pending state
-                router.refresh();
+                if (isDialog) {
+                    toast.success("Business added successfully! 🎉");
+                    onSuccess?.(); // Close dialog & refresh
+                } else {
+                    toast.success("Welcome to SA Tours! 🎉");
+                    router.push("/operator/dashboard");
+                    router.refresh();
+                }
             } else if (!result.success && "error" in result) {
-                toast.error(result.error.message || "Failed to submit application");
+                toast.error(result.error.message || "Failed to create profile");
             }
         } catch (error) {
-            console.error("Error submitting application:", error);
+            console.error("Error creating profile:", error);
             toast.error("Something went wrong. Please try again.");
         } finally {
             setIsSubmitting(false);
@@ -114,9 +122,7 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="TourOperator">Tour Operator</SelectItem>
-                                <SelectItem value="DMC">
-                                    DMC (Destination Management Company)
-                                </SelectItem>
+                                <SelectItem value="DMC">DMC (Destination Management Company)</SelectItem>
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-gray-500">
@@ -165,13 +171,16 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
                 <div className="space-y-4">
                     {/* Business Phone */}
                     <div className="space-y-2">
-                        <Label htmlFor="businessPhone">Business Phone</Label>
+                        <Label htmlFor="businessPhone">
+                            Business Phone <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                             id="businessPhone"
                             type="tel"
                             placeholder="+27 12 345 6789"
                             value={businessPhone}
                             onChange={(e) => setBusinessPhone(e.target.value)}
+                            required
                         />
                     </div>
 
@@ -190,10 +199,7 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
                                     }
                                 }}
                             />
-                            <label
-                                htmlFor="whatsappSame"
-                                className="text-sm text-gray-600 cursor-pointer"
-                            >
+                            <label htmlFor="whatsappSame" className="text-sm text-gray-600 cursor-pointer">
                                 Same as business phone
                             </label>
                         </div>
@@ -222,48 +228,32 @@ export function OperatorApplicationForm({ userId }: OperatorApplicationFormProps
             </div>
 
             {/* Info Notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
-                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-900">
-                    <p className="font-medium mb-1">What happens after you apply?</p>
-                    <ul className="space-y-1 text-blue-800">
-                        <li>• Our team will review your application within 1-2 business days</li>
-                        <li>• You&apos;ll receive an email notification once approved</li>
-                        <li>• Once approved, you can start creating tours and responding to quotes</li>
-                    </ul>
+            {!isDialog && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-900">
+                        <p className="font-medium mb-1">What happens next?</p>
+                        <ul className="space-y-1 text-blue-800">
+                            <li>• Get instant access to create and manage tours</li>
+                            <li>• Your tours start in draft mode (not visible to customers)</li>
+                            <li>• Complete verification to go live and start receiving bookings</li>
+                        </ul>
+                    </div>
                 </div>
-            </div>
-
-            {/* Terms & Conditions */}
-            <div className="flex items-start gap-3 p-4 border rounded-lg">
-                <Checkbox
-                    id="terms"
-                    checked={acceptedTerms}
-                    onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
-                />
-                <div className="flex-1">
-                    <label
-                        htmlFor="terms"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                        I accept the terms and conditions <span className="text-red-500">*</span>
-                    </label>
-                    <p className="text-xs text-gray-500 mt-1">
-                        I understand that SA Tours will review my application and that I agree to comply with
-                        the platform&apos;s operator guidelines and terms of service.
-                    </p>
-                </div>
-            </div>
+            )}
 
             {/* Submit Button */}
-            <Button type="submit" disabled={isSubmitting || !acceptedTerms} size="lg" className="w-full">
+            <Button type="submit" disabled={isSubmitting} size="lg" className="w-full">
                 {isSubmitting ? (
                     <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Submitting Application...
+                        {isDialog ? "Adding Business..." : "Creating Your Account..."}
                     </>
                 ) : (
-                    "Submit Application"
+                    <>
+                        <Rocket className="w-4 h-4 mr-2" />
+                        {isDialog ? "Add Business" : "Create Operator Account"}
+                    </>
                 )}
             </Button>
         </form>

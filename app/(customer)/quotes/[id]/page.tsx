@@ -3,31 +3,28 @@ import { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { getQuoteRequestById } from "@/actions/quote-requests";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
     ArrowLeft,
     Calendar,
     Users,
     MapPin,
     Clock,
-    MessageSquareQuote,
     CheckCircle2,
     AlertCircle,
     XCircle,
     Loader2,
     DollarSign,
-    FileText,
-    Image as ImageIcon
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { QuoteStatus } from "@prisma/client";
-import { formatDistanceToNow } from "date-fns";
-import { QuoteMessages } from "@/components/quotes/quote-messages";
+import { format, formatDistanceToNow } from "date-fns";
+import { QuoteChatWidget } from "@/components/quotes/quote-chat-widget";
 import { QuoteActions } from "@/components/quotes/quote-actions";
+import { QuoteDetailsAccordion } from "@/components/quotes/quote-details-accordion";
 
 interface QuoteDetailPageProps {
     params: {
@@ -52,7 +49,7 @@ const STATUS_CONFIG = {
     },
     [QuoteStatus.Quoted]: {
         label: "Quoted",
-        icon: MessageSquareQuote,
+        icon: DollarSign,
         className: "bg-blue-100 text-blue-800 border-blue-200",
     },
     [QuoteStatus.Accepted]: {
@@ -64,6 +61,21 @@ const STATUS_CONFIG = {
         label: "Confirmed",
         icon: CheckCircle2,
         className: "bg-green-100 text-green-800 border-green-200",
+    },
+    [QuoteStatus.Completed]: {
+        label: "Completed",
+        icon: CheckCircle2,
+        className: "bg-green-600 text-white border-green-600",
+    },
+    [QuoteStatus.Disputed]: {
+        label: "Disputed",
+        icon: AlertCircle,
+        className: "bg-red-100 text-red-800 border-red-200",
+    },
+    [QuoteStatus.Refunded]: {
+        label: "Refunded",
+        icon: XCircle,
+        className: "bg-gray-100 text-gray-800 border-gray-200",
     },
     [QuoteStatus.Rejected]: {
         label: "Rejected",
@@ -82,7 +94,6 @@ const STATUS_CONFIG = {
     },
 };
 
-
 export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) {
     const user = await currentUser();
 
@@ -98,270 +109,174 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
     }
 
     const { quoteRequest } = result.data;
+
+    // Redirect to bookings page if quote is paid or beyond
+    if ([QuoteStatus.Paid, QuoteStatus.Completed, QuoteStatus.Disputed, QuoteStatus.Refunded].includes(quoteRequest.status)) {
+        redirect(`/bookings/${quoteRequest.id}`);
+    }
+
     const statusConfig = STATUS_CONFIG[quoteRequest.status];
     const StatusIcon = statusConfig.icon;
     const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=800&h=600&fit=crop";
 
-    const formatPrice = (priceInCents: number) => {
-        const rands = priceInCents / 100;
-        return `R${rands.toLocaleString('en-ZA')}`;
-    };
-
-    const showQuoteDetails = ([
-        QuoteStatus.Quoted,
-        QuoteStatus.Accepted,
-        QuoteStatus.Paid,
-        QuoteStatus.Rejected,
-        QuoteStatus.Cancelled,
-        QuoteStatus.Expired,
-    ] as QuoteStatus[]).includes(quoteRequest.status);
-
     const totalGuests = quoteRequest.adults + quoteRequest.children;
 
     return (
-        <div className="min-h-screen bg-gray-50/50">
-            <div className="container mx-auto px-4 py-4 md:py-8 pb-24 md:pb-8">
+        <div className="min-h-screen bg-gray-50/50 pb-32 md:pb-8">
+            <div className="container mx-auto px-4 py-4 md:py-8">
                 {/* Back Button */}
-                <Button variant="ghost" asChild className="mb-4 md:mb-6">
+                <Button variant="ghost" size="sm" asChild className="mb-4 md:mb-6">
                     <Link href="/quotes">
                         <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Quotes
+                        Back
                     </Link>
                 </Button>
 
-                {/* Header */}
+                {/* Header - Compact */}
                 <div className="mb-4 md:mb-6">
-                    <div className="flex flex-col gap-3 mb-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                            <h1 className="text-2xl md:text-3xl font-bold">Quote Request</h1>
-                            <Badge variant="secondary" className={`${statusConfig.className} flex items-center gap-1 w-fit`}>
-                                <StatusIcon className="w-4 h-4" />
-                                {statusConfig.label}
-                            </Badge>
-                        </div>
-                        <div>
-                            <p className="text-sm md:text-base text-gray-600">Reference: {quoteRequest.reference}</p>
-                            <p className="text-xs md:text-sm text-gray-500">
-                                Submitted {formatDistanceToNow(new Date(quoteRequest.createdAt), { addSuffix: true })}
-                            </p>
-                        </div>
+                    <div className="flex items-center justify-between mb-2">
+                        <h1 className="text-xl md:text-2xl font-bold">Quote {quoteRequest.reference}</h1>
+                        <Badge variant="secondary" className={`${statusConfig.className} flex items-center gap-1`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {statusConfig.label}
+                        </Badge>
                     </div>
+                    <p className="text-xs text-gray-500">
+                        {formatDistanceToNow(new Date(quoteRequest.createdAt), { addSuffix: true })}
+                    </p>
                 </div>
 
-                {/* Mobile: Actions at Top */}
-                <div className="md:hidden mb-6">
-                    <QuoteActions quoteRequest={quoteRequest} />
-                </div>
-
-                <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
+                {/* Grid Layout: Main Content + Sidebar */}
+                <div className="grid lg:grid-cols-3 gap-6">
                     {/* Main Content */}
-                    <div className="lg:col-span-2 space-y-4 md:space-y-6">
-                        {/* Tour Information */}
+                    <div className="lg:col-span-2 space-y-4">
+                        {/* Tour Summary Card - Compact */}
                         <Card className="overflow-hidden">
-                            {/* Tour Image */}
-                            {quoteRequest.tour.images.length > 0 && (
-                                <div className="relative h-64 bg-gray-200">
-                                    <Image
-                                        src={quoteRequest.tour.images[0] || defaultImage}
-                                        alt={quoteRequest.tour.title}
-                                        fill
-                                        className="object-cover"
-                                        priority
-                                        sizes="(max-width: 1024px) 100vw, 66vw"
-                                    />
-                                </div>
-                            )}
-
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <h2 className="text-2xl font-bold mb-2">{quoteRequest.tour.title}</h2>
-                                    <p className="text-gray-600">{quoteRequest.tour.description}</p>
-                                </div>
-
-                                <Separator />
-
-                                {/* Tour Details Grid */}
-                                <div className="grid sm:grid-cols-2 gap-4 text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <MapPin className="w-4 h-4 text-gray-400" />
-                                        <div>
-                                            <p className="text-gray-500">Location</p>
-                                            <p className="font-medium">
-                                                {quoteRequest.tour.region || quoteRequest.tour.countries.join(", ")}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Clock className="w-4 h-4 text-gray-400" />
-                                        <div>
-                                            <p className="text-gray-500">Duration</p>
-                                            <p className="font-medium">{quoteRequest.tour.duration}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4 text-gray-400" />
-                                        <div>
-                                            <p className="text-gray-500">Preferred Date</p>
-                                            <p className="font-medium">
-                                                {new Date(quoteRequest.preferredDate).toLocaleDateString('en-ZA', {
-                                                    day: 'numeric',
-                                                    month: 'long',
-                                                    year: 'numeric',
-                                                })}
-                                                {quoteRequest.flexibleDates && " (Flexible)"}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Users className="w-4 h-4 text-gray-400" />
-                                        <div>
-                                            <p className="text-gray-500">Guests</p>
-                                            <p className="font-medium">
-                                                {quoteRequest.adults} Adult{quoteRequest.adults !== 1 ? "s" : ""}
-                                                {quoteRequest.children > 0 &&
-                                                    `, ${quoteRequest.children} Child${quoteRequest.children !== 1 ? "ren" : ""}`
-                                                }
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Child Ages */}
-                                {quoteRequest.childAges && quoteRequest.childAges.length > 0 && (
-                                    <div>
-                                        <p className="text-sm text-gray-500 mb-1">Children&apos;s Ages</p>
-                                        <p className="font-medium">{quoteRequest.childAges.join(", ")} years old</p>
+                            <div className="flex gap-3 p-4">
+                                {/* Small Image */}
+                                {quoteRequest.tour.images.length > 0 && (
+                                    <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200">
+                                        <Image
+                                            src={quoteRequest.tour.images[0] || defaultImage}
+                                            alt={quoteRequest.tour.title}
+                                            fill
+                                            className="object-cover"
+                                            sizes="96px"
+                                        />
                                     </div>
                                 )}
 
-                                {/* Budget Range */}
-                                {quoteRequest.budgetRange && (
-                                    <div>
-                                        <p className="text-sm text-gray-500 mb-1">Budget Range</p>
-                                        <p className="font-medium">{quoteRequest.budgetRange}</p>
+                                {/* Tour Info */}
+                                <div className="flex-1 min-w-0">
+                                    <h2 className="font-semibold text-base md:text-lg mb-2 line-clamp-2">
+                                        {quoteRequest.tour.title}
+                                    </h2>
+
+                                    {/* Compact Info Chips */}
+                                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                                        <div className="flex items-center gap-1">
+                                            <MapPin className="w-3 h-3" />
+                                            <span>{quoteRequest.tour.region || quoteRequest.tour.countries[0]}</span>
+                                        </div>
+                                        <span className="text-gray-300">•</span>
+                                        <div className="flex items-center gap-1">
+                                            <Clock className="w-3 h-3" />
+                                            <span>{quoteRequest.tour.duration}</span>
+                                        </div>
+                                        <span className="text-gray-300">•</span>
+                                        <div className="flex items-center gap-1">
+                                            <Users className="w-3 h-3" />
+                                            <span>{totalGuests} guest{totalGuests !== 1 ? 's' : ''}</span>
+                                        </div>
+                                        <span className="text-gray-300">•</span>
+                                        <div className="flex items-center gap-1">
+                                            <Calendar className="w-3 h-3" />
+                                            <span>{format(new Date(quoteRequest.preferredDate), "MMM dd, yyyy")}</span>
+                                        </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </Card>
 
-                        {/* Special Requirements */}
+                        {/* Your Requirements - Compact */}
                         {quoteRequest.specialRequirements && (
-                            <Card className="p-6">
-                                <div className="flex items-start gap-3">
-                                    <FileText className="w-5 h-5 text-gray-400 mt-0.5" />
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold mb-2">Your Requirements</h3>
-                                        <p className="text-gray-600 whitespace-pre-line">
-                                            {quoteRequest.specialRequirements}
-                                        </p>
-                                    </div>
-                                </div>
-                            </Card>
-                        )}
-
-                        {/* Operator's Quote Details */}
-                        {quoteRequest.quotedPrice && showQuoteDetails && (
-                            <Card className="p-6 border-2 border-primary/20">
-                                <div className="flex items-start gap-3 mb-4">
-                                    <DollarSign className="w-6 h-6 text-primary" />
-                                    <div className="flex-1">
-                                        <h3 className="text-xl font-bold mb-1">Operator&apos;s Quote</h3>
-                                        <p className="text-gray-600">
-                                            Valid until {new Date(quoteRequest.quoteExpiresAt!).toLocaleString('en-ZA')}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Quoted Price */}
-                                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                                    <p className="text-sm text-gray-600 mb-1">Total Quoted Price</p>
-                                    <p className="text-3xl font-bold text-primary">
-                                        {formatPrice(quoteRequest.quotedPrice)}
+                            <Card>
+                                <CardContent className="p-4">
+                                    <h3 className="text-sm font-semibold mb-2 text-gray-700">Your Requirements</h3>
+                                    <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                                        {quoteRequest.specialRequirements}
                                     </p>
-                                </div>
-
-                                {/* Quoted Inclusions */}
-                                {quoteRequest.quotedInclusions && Array.isArray(quoteRequest.quotedInclusions) && quoteRequest.quotedInclusions.length > 0 && (
-                                    <div className="mb-4">
-                                        <h4 className="font-semibold mb-2 flex items-center gap-2">
-                                            <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                            Inclusions
-                                        </h4>
-                                        <ul className="space-y-2">
-                                            {(quoteRequest.quotedInclusions as Array<{ item: string; price: number | null }>).map((inclusion, index) => (
-                                                <li key={index} className="flex items-start justify-between text-sm">
-                                                    <span className="flex items-start gap-2">
-                                                        <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                                        <span>{inclusion.item}</span>
-                                                    </span>
-                                                    {inclusion.price && (
-                                                        <span className="font-medium text-primary">
-                                                            +{formatPrice(inclusion.price)}
-                                                        </span>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                {/* Quoted Exclusions */}
-                                {quoteRequest.quotedExclusions && Array.isArray(quoteRequest.quotedExclusions) && quoteRequest.quotedExclusions.length > 0 && (
-                                    <div className="mb-4">
-                                        <h4 className="font-semibold mb-2 flex items-center gap-2">
-                                            <XCircle className="w-4 h-4 text-red-600" />
-                                            Not Included
-                                        </h4>
-                                        <ul className="space-y-2">
-                                            {(quoteRequest.quotedExclusions as Array<{ item: string; price: number | null }>).map((exclusion, index) => (
-                                                <li key={index} className="flex items-start justify-between text-sm">
-                                                    <span className="flex items-start gap-2">
-                                                        <XCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                                        <span>{exclusion.item}</span>
-                                                    </span>
-                                                    {exclusion.price && (
-                                                        <span className="text-gray-600">
-                                                            {formatPrice(exclusion.price)}
-                                                        </span>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                {/* Quoted Terms */}
-                                {quoteRequest.quotedTerms && (
-                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                                        <h4 className="font-semibold mb-2 text-sm">Terms & Conditions</h4>
-                                        <p className="text-sm text-gray-700 whitespace-pre-line">
-                                            {quoteRequest.quotedTerms}
-                                        </p>
-                                    </div>
-                                )}
+                                </CardContent>
                             </Card>
                         )}
 
-                        {/* Messages Section */}
-                        <Card className="p-6">
-                            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                <MessageSquareQuote className="w-5 h-5" />
-                                Conversation
-                            </h3>
-                            <QuoteMessages
-                                quoteRequestId={quoteRequest.id}
-                                messages={quoteRequest.messages}
-                                currentUserId={user.id}
-                            />
-                        </Card>
+                        {/* Quote Details - Expandable */}
+                        {quoteRequest.quotedPrice && (
+                            <QuoteDetailsAccordion quoteRequest={quoteRequest} />
+                        )}
+
+                        {/* Pending State */}
+                        {quoteRequest.status === QuoteStatus.Pending && (
+                            <Card>
+                                <CardContent className="p-6 text-center">
+                                    <Loader2 className="w-8 h-8 mx-auto mb-3 text-yellow-500 animate-spin" />
+                                    <h3 className="font-semibold mb-1">Awaiting Response</h3>
+                                    <p className="text-sm text-gray-600">
+                                        The operator will respond within 24 hours.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Rejected/Cancelled/Expired States */}
+                        {quoteRequest.status === QuoteStatus.Rejected && quoteRequest.rejectionReason && (
+                            <Card className="border-gray-200">
+                                <CardContent className="p-4">
+                                    <h3 className="text-sm font-semibold mb-2 text-gray-700">Rejection Reason</h3>
+                                    <p className="text-sm text-gray-600">{quoteRequest.rejectionReason}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {quoteRequest.status === QuoteStatus.Cancelled && quoteRequest.cancellationReason && (
+                            <Card className="border-gray-200">
+                                <CardContent className="p-4">
+                                    <h3 className="text-sm font-semibold mb-2 text-gray-700">Cancellation Reason</h3>
+                                    <p className="text-sm text-gray-600">{quoteRequest.cancellationReason}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {quoteRequest.status === QuoteStatus.Expired && (
+                            <Card className="border-orange-200 bg-orange-50">
+                                <CardContent className="p-4 text-center">
+                                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-orange-600" />
+                                    <h3 className="font-semibold mb-1 text-orange-900">Quote Expired</h3>
+                                    <p className="text-sm text-orange-700 mb-3">
+                                        This quote has expired. Request a new quote to continue.
+                                    </p>
+                                    <Button size="sm" asChild>
+                                        <Link href={`/tours/${quoteRequest.tour.id}`}>Request New Quote</Link>
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
 
-                    {/* Sidebar - Actions (Desktop Only) */}
-                    <div className="hidden md:block lg:col-span-1">
+                    {/* Sidebar - Actions (Desktop) + Mobile Sticky Bottom */}
+                    <div className="lg:col-span-1">
                         <QuoteActions quoteRequest={quoteRequest} />
                     </div>
                 </div>
             </div>
+
+            {/* Floating Chat Widget */}
+            <QuoteChatWidget
+                quoteRequestId={quoteRequest.id}
+                messages={quoteRequest.messages}
+                currentUserId={user.id}
+                userRole="customer"
+            />
         </div>
     );
 }

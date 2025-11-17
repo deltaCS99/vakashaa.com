@@ -2,9 +2,10 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { getAdminDashboardStats, getRecentActivity } from "@/actions/admin/dashboard";
-import { StatsCards } from "@/components/admin/stats-cards";
-import { RecentActivity } from "@/components/admin/recent-activity";
+import { getAdminDashboardStats, getRecentSignups } from "@/actions/admin/dashboard";
+import { UrgentActionCard } from "@/components/admin/urgent-action-card";
+import { WeeklyStats } from "@/components/admin/weekly-stats";
+import { RecentSignups } from "@/components/admin/recent-signups";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard | SA Tours",
@@ -18,18 +19,27 @@ export default async function AdminDashboardPage() {
     redirect("/");
   }
 
-  const [statsResult, activityResult] = await Promise.all([
+  const [statsResult, signupsResult] = await Promise.all([
     getAdminDashboardStats(),
-    getRecentActivity(),
+    getRecentSignups(),
   ]);
 
-  const stats =
-    statsResult.success && "data" in statsResult ? statsResult.data : null;
+  if (!statsResult.success || !("data" in statsResult)) {
+    return (
+      <div className="min-h-screen bg-gray-50/50">
+        <div className="container mx-auto px-4 py-12">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Error Loading Dashboard</h1>
+            <p className="text-gray-600">Failed to load dashboard data. Please try again.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const activity =
-    activityResult.success && "data" in activityResult
-      ? activityResult.data
-      : null;
+  const { urgentActions, weeklyStats } = statsResult.data;
+  const operators =
+    signupsResult.success && "data" in signupsResult ? signupsResult.data.operators : [];
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -37,20 +47,17 @@ export default async function AdminDashboardPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-2">
-            Welcome back, {user.name}. Here&apos;s what&apos;s happening with your platform.
-          </p>
+          <p className="text-gray-600 mt-2">Welcome back, {user.name}</p>
         </div>
 
-        {/* Stats Cards */}
-        {stats && <StatsCards stats={stats} />}
+        {/* Urgent Actions */}
+        <UrgentActionCard urgentActions={urgentActions} />
 
-        {/* Recent Activity */}
-        {activity && (
-          <div className="mt-8">
-            <RecentActivity activity={activity} />
-          </div>
-        )}
+        {/* Weekly Stats */}
+        <WeeklyStats stats={weeklyStats} />
+
+        {/* Recent Signups */}
+        <RecentSignups operators={operators} />
       </div>
     </div>
   );

@@ -26,7 +26,7 @@ import {
   Ban,
   ExternalLink,
 } from "lucide-react";
-import { QuoteStatus } from "@prisma/client";
+import { QuoteStatus, Tour } from "@prisma/client";
 import { acceptQuote, rejectQuote, cancelQuoteRequest } from "@/actions/quote-requests";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ interface QuoteActionsProps {
     paymentLink: string | null;
     rejectionReason: string | null;
     cancellationReason: string | null;
+    tour: Tour;
     createdAt: Date;
     quotedAt: Date | null;
     acceptedAt: Date | null;
@@ -132,9 +133,10 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
 
   return (
     <>
-      <Card className="sticky top-24 p-6 space-y-6">
+      {/* Desktop Sidebar - Original Design */}
+      <Card className="sticky top-24 p-6 space-y-6 hidden md:block">
         {/* Status-Specific Content */}
-        
+
         {/* PENDING */}
         {quoteRequest.status === QuoteStatus.Pending && (
           <div className="text-center py-4">
@@ -329,7 +331,7 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
               This quote has expired. Request a new quote to continue.
             </p>
             <Button size="lg" className="w-full" asChild>
-              <a href={`/tours/${quoteRequest.reference}`}>Request New Quote</a>
+              <a href={`/tours/${quoteRequest.tour.id}`}>Request New Quote</a>
             </Button>
           </div>
         )}
@@ -380,8 +382,109 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
         </div>
       </Card>
 
-      {/* Accept Confirmation Dialog */}
-      <Dialog open={showAcceptDialog} onOpenChange={setShowAcceptDialog}>
+      {/* Mobile Sticky Bottom Actions */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4 z-30">
+        {/* QUOTED - Mobile */}
+        {quoteRequest.status === QuoteStatus.Quoted && (
+          <div className="space-y-2">
+            {quoteRequest.quotedPrice && (
+              <div className="text-center mb-2">
+                <p className="text-xs text-gray-600">Total Quote</p>
+                <p className="text-2xl font-bold text-primary">
+                  {formatPrice(quoteRequest.quotedPrice)}
+                </p>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setShowRejectDialog(true)}
+              >
+                Reject
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => setShowAcceptDialog(true)}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Accept
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ACCEPTED - Mobile */}
+        {quoteRequest.status === QuoteStatus.Accepted && (
+          <div className="space-y-2">
+            {quoteRequest.quotedPrice && (
+              <div className="text-center mb-2">
+                <p className="text-xs text-gray-600">Amount Due</p>
+                <p className="text-xl font-bold">
+                  {formatPrice(quoteRequest.quotedPrice)}
+                </p>
+              </div>
+            )}
+            {quoteRequest.paymentLink ? (
+              <Button size="lg" className="w-full" asChild>
+                <a
+                  href={quoteRequest.paymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Pay Now
+                  <ExternalLink className="w-4 h-4 ml-2" />
+                </a>
+              </Button>
+            ) : (
+              <Button size="lg" className="w-full" disabled>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating Payment Link...
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowCancelDialog(true)}
+            >
+              Cancel Booking
+            </Button>
+          </div>
+        )}
+
+        {/* PENDING - Mobile */}
+        {quoteRequest.status === QuoteStatus.Pending && (
+          <div className="text-center py-2">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Loader2 className="w-5 h-5 text-yellow-500 animate-spin" />
+              <span className="font-semibold">Awaiting Response</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowCancelDialog(true)}
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Cancel Request
+            </Button>
+          </div>
+        )}
+
+        {/* EXPIRED - Mobile */}
+        {quoteRequest.status === QuoteStatus.Expired && (
+          <Button size="lg" className="w-full" asChild>
+            <a href={`/tours/${quoteRequest.tour.id}`}>Request New Quote</a>
+          </Button>
+        )}
+      </div >
+
+      {/* Dialogs - Same for both desktop and mobile */}
+      < Dialog open={showAcceptDialog} onOpenChange={setShowAcceptDialog} >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Accept Quote?</DialogTitle>
@@ -419,9 +522,8 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
-      {/* Reject Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent>
           <DialogHeader>
@@ -471,7 +573,6 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Cancel Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <DialogContent>
           <DialogHeader>

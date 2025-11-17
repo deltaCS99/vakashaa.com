@@ -9,8 +9,8 @@ import { OperatorType, ServiceType } from "@prisma/client";
 interface SubmitApplicationParams {
     userId: string;
     businessName: string;
-    businessPhone?: string;
-    businessWhatsApp?: string;
+    businessPhone: string;
+    businessWhatsApp: string;
     description?: string;
     operatorType: OperatorType;
     serviceType: ServiceType;
@@ -19,12 +19,12 @@ interface SubmitApplicationParams {
 export const submitOperatorApplication = async (params: SubmitApplicationParams) => {
     try {
         // Validate required fields
-        if (!params.userId || !params.businessName) {
+        if (!params.userId || !params.businessName || !params.businessPhone) {
             return response({
                 success: false,
                 error: {
                     code: 400,
-                    message: "User ID and business name are required.",
+                    message: "User ID, business name, and phone are required.",
                 },
             });
         }
@@ -44,21 +44,6 @@ export const submitOperatorApplication = async (params: SubmitApplicationParams)
             });
         }
 
-        // Check if operator profile already exists
-        const existingProfile = await db.operatorProfile.findUnique({
-            where: { userId: params.userId },
-        });
-
-        if (existingProfile) {
-            return response({
-                success: false,
-                error: {
-                    code: 400,
-                    message: "You have already submitted an operator application.",
-                },
-            });
-        }
-
         // Create operator profile
         const operatorProfile = await db.operatorProfile.create({
             data: {
@@ -69,18 +54,17 @@ export const submitOperatorApplication = async (params: SubmitApplicationParams)
                 description: params.description,
                 operatorType: params.operatorType,
                 serviceType: params.serviceType,
-                isApproved: false, // Requires admin approval
+                isApproved: false, // Draft mode
             },
         });
 
-        // Update user role to Operator
-        await db.user.update({
-            where: { id: params.userId },
-            data: { role: "Operator" },
-        });
-
-        // TODO: Send notification email to admin about new application
-        // TODO: Send confirmation email to applicant
+        // Update user role to Operator (only if not already)
+        if (user.role !== "Operator") {
+            await db.user.update({
+                where: { id: params.userId },
+                data: { role: "Operator" },
+            });
+        }
 
         revalidatePath("/operator/apply");
         revalidatePath("/operator/dashboard");
@@ -91,12 +75,12 @@ export const submitOperatorApplication = async (params: SubmitApplicationParams)
             data: { operatorProfile },
         });
     } catch (error: any) {
-        console.error("Error submitting operator application:", error);
+        console.error("Error creating operator profile:", error);
         return response({
             success: false,
             error: {
                 code: 500,
-                message: "Failed to submit application. Please try again.",
+                message: "Failed to create profile. Please try again.",
             },
         });
     }

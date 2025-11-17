@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,8 +59,7 @@ export function OperatorTourCard({ tour, operatorProfileId }: OperatorTourCardPr
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-    const defaultImage =
-        "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=800&h=600&fit=crop";
+    const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
 
     const formatPrice = (priceInCents: number) => {
         const rands = priceInCents / 100;
@@ -106,44 +105,110 @@ export function OperatorTourCard({ tour, operatorProfileId }: OperatorTourCardPr
 
     return (
         <>
-            <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-200 h-full">
-                {/* Tour Image */}
-                <div className="relative h-48 bg-gray-200">
+            <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-200 group">
+                {/* Compact Image - 80px height */}
+                <div className="relative h-20 bg-gray-200">
                     <Image
                         src={tour.images[0] || defaultImage}
                         alt={tour.title}
                         fill
-                        className="object-cover"
+                        className="object-cover group-hover:scale-105 transition-transform duration-200"
                         sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     />
 
                     {/* Status Badge */}
-                    <div className="absolute top-2 left-2">
-                        <Badge variant={tour.isActive ? "default" : "secondary"} className="font-medium">
-                            {tour.isActive ? "Active" : "Inactive"}
+                    <div className="absolute top-1.5 right-1.5">
+                        <Badge
+                            variant={tour.isActive ? "default" : "secondary"}
+                            className={`text-xs px-2 py-0.5 ${
+                                tour.isActive ? "bg-green-600" : "bg-gray-400"
+                            }`}
+                        >
+                            {tour.isActive ? (
+                                <>
+                                    <Eye className="w-3 h-3 mr-1" />
+                                    Live
+                                </>
+                            ) : (
+                                <>
+                                    <EyeOff className="w-3 h-3 mr-1" />
+                                    Hidden
+                                </>
+                            )}
                         </Badge>
                     </div>
 
                     {/* Quote Count Badge */}
                     {tour._count.quoteRequests > 0 && (
-                        <div className="absolute top-2 right-2">
-                            <Badge variant="secondary" className="bg-white/90 backdrop-blur">
+                        <div className="absolute top-1.5 left-1.5">
+                            <Badge variant="secondary" className="bg-white/90 backdrop-blur text-xs px-2 py-0.5">
                                 <MessageSquare className="w-3 h-3 mr-1" />
                                 {tour._count.quoteRequests}
                             </Badge>
                         </div>
                     )}
+                </div>
 
-                    {/* Actions Menu */}
-                    <div className="absolute bottom-2 right-2">
+                {/* Compact Content */}
+                <div className="p-3 space-y-2">
+                    {/* Title + Category */}
+                    <div>
+                        {tour.category && (
+                            <Badge variant="outline" className="text-xs mb-1">
+                                {tour.category}
+                            </Badge>
+                        )}
+                        <h3 className="font-semibold text-sm line-clamp-2 mb-1">
+                            {tour.title}
+                        </h3>
+                    </div>
+
+                    {/* Compact Info - Single Line */}
+                    <div className="text-xs text-gray-600">
+                        <div className="flex items-center gap-1 mb-1">
+                            <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{tour.region || tour.countries[0]}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{tour.duration}</span>
+                            </div>
+                            {tour.maxCapacity && (
+                                <>
+                                    <span className="text-gray-400">•</span>
+                                    <div className="flex items-center gap-1">
+                                        <Users className="w-3 h-3" />
+                                        <span>Max {tour.maxCapacity}</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Starting Price - Compact */}
+                    {tour.priceFrom && (
+                        <div className="flex items-baseline justify-between pt-2 border-t">
+                            <div>
+                                <p className="text-xs text-gray-500">From</p>
+                                <p className="text-lg font-bold text-primary">
+                                    {formatPrice(tour.priceFrom)}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Buttons - Compact */}
+                    <div className="flex gap-2 pt-2">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    className="h-8 w-8 bg-white/90 backdrop-blur hover:bg-white"
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="flex-1 text-xs h-8"
                                 >
-                                    <MoreVertical className="h-4 w-4" />
+                                    <MoreVertical className="w-3 h-3 mr-1" />
+                                    Actions
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -176,50 +241,19 @@ export function OperatorTourCard({ tour, operatorProfileId }: OperatorTourCardPr
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
+
+                        <TourFormDialog mode="edit" tour={tour} operatorProfileId={operatorProfileId}>
+                            <Button 
+                                variant="default" 
+                                size="sm" 
+                                className="flex-1 text-xs h-8"
+                            >
+                                <Edit className="w-3 h-3 mr-1" />
+                                Edit
+                            </Button>
+                        </TourFormDialog>
                     </div>
                 </div>
-
-                {/* Content */}
-                <CardContent className="p-4 space-y-3">
-                    {/* Category */}
-                    {tour.category && (
-                        <Badge variant="outline" className="text-xs">
-                            {tour.category}
-                        </Badge>
-                    )}
-
-                    {/* Title */}
-                    <h3 className="font-semibold text-lg line-clamp-2 min-h-[3.5rem]">{tour.title}</h3>
-
-                    {/* Description */}
-                    <p className="text-sm text-gray-600 line-clamp-2">{tour.description}</p>
-
-                    {/* Details */}
-                    <div className="space-y-2 text-sm text-gray-600 pt-2 border-t">
-                        <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{tour.countries.join(", ")}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 flex-shrink-0" />
-                            <span>{tour.duration}</span>
-                        </div>
-                        {tour.maxCapacity && (
-                            <div className="flex items-center gap-2">
-                                <Users className="w-4 h-4 flex-shrink-0" />
-                                <span>Max {tour.maxCapacity} guests</span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Price */}
-                    {tour.priceFrom && (
-                        <div className="pt-3 border-t">
-                            <p className="text-xs text-gray-600">Starting from</p>
-                            <p className="text-xl font-bold text-primary">{formatPrice(tour.priceFrom)}</p>
-                        </div>
-                    )}
-                </CardContent>
             </Card>
 
             {/* Delete Confirmation Dialog */}

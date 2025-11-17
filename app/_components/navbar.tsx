@@ -140,12 +140,12 @@ function AuthNav({ user }: { user: any }) {
                 Profile
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            {/*             <DropdownMenuItem asChild>
               <Link href="/settings" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </Link>
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
           </DropdownMenuGroup>
         )}
 
@@ -171,6 +171,12 @@ function AuthNav({ user }: { user: any }) {
                 Quote Requests
               </Link>
             </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/operator/bookings" className="cursor-pointer">
+                <Calendar className="mr-2 h-4 w-4" />
+                Bookings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/profile" className="cursor-pointer">
@@ -178,12 +184,12 @@ function AuthNav({ user }: { user: any }) {
                 Profile
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/settings" className="cursor-pointer">
+            {/*             <DropdownMenuItem asChild>
+              <Link href="/operator/settings" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </Link>
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
           </DropdownMenuGroup>
         )}
 
@@ -235,7 +241,7 @@ function AuthNav({ user }: { user: any }) {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/settings" className="cursor-pointer">
+              <Link href="/admin/settings" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </Link>

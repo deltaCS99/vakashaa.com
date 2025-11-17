@@ -179,6 +179,19 @@ export const getUserQuoteRequests = async () => {
             });
         }
 
+        // Auto-expire quotes that have passed their expiration date
+        await db.quoteRequest.updateMany({
+            where: {
+                status: QuoteStatus.Quoted,
+                quoteExpiresAt: {
+                    lt: new Date(), // less than now
+                },
+            },
+            data: {
+                status: QuoteStatus.Expired,
+            },
+        });
+
         const quoteRequests = await db.quoteRequest.findMany({
             where: {
                 userId: user.id,
@@ -238,13 +251,26 @@ export const getQuoteRequestById = async (id: string) => {
             });
         }
 
+        // Auto-expire quotes that have passed their expiration date
+        await db.quoteRequest.updateMany({
+            where: {
+                status: QuoteStatus.Quoted,
+                quoteExpiresAt: {
+                    lt: new Date(),
+                },
+            },
+            data: {
+                status: QuoteStatus.Expired,
+            },
+        });
+
         const quoteRequest = await db.quoteRequest.findFirst({
             where: {
                 id,
-                userId: user.id, // Ensure user owns this quote request
+                userId: user.id,
             },
             include: {
-                tour: true, // Get all tour fields
+                tour: true,
                 messages: {
                     orderBy: {
                         createdAt: 'asc',

@@ -4,7 +4,6 @@
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
-import { QuoteStatus, BlogStatus } from "@prisma/client";
 
 export const getAdminDashboardStats = async () => {
   try {
@@ -20,54 +19,64 @@ export const getAdminDashboardStats = async () => {
       });
     }
 
-    // Get counts
-    const [
-      totalOperators,
-      pendingOperators,
-      approvedOperators,
-      totalTours,
-      activeTours,
-      totalQuotes,
-      pendingQuotes,
-      totalUsers,
-      totalBlogPosts,
-      publishedBlogPosts,
-    ] = await Promise.all([
-      db.operatorProfile.count(),
-      db.operatorProfile.count({ where: { isApproved: false } }),
-      db.operatorProfile.count({ where: { isApproved: true } }),
-      db.tour.count(),
-      db.tour.count({ where: { isActive: true } }),
-      db.quoteRequest.count(),
-      db.quoteRequest.count({ where: { status: QuoteStatus.Pending } }),
-      db.user.count({ where: { role: "User" } }),
-      db.blogPost.count(),
-      db.blogPost.count({ where: { status: BlogStatus.Published } }),
+    // Get urgent actions
+    const [pendingOperators, pendingBankVerifications] = await Promise.all([
+      db.operatorProfile.count({
+        where: {
+          isApproved: false,
+          verificationDocumentsSubmittedAt: { not: null },
+        },
+      }),
+      db.operatorProfile.count({
+        where: {
+          isApproved: true,
+          bankVerificationStatus: "Pending",
+        },
+      }),
+    ]);
+
+    // Get this week's stats (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const [newOperators, newTours, newQuotes, confirmedBookings] = await Promise.all([
+      db.operatorProfile.count({
+        where: {
+          createdAt: { gte: weekAgo },
+        },
+      }),
+      db.tour.count({
+        where: {
+          createdAt: { gte: weekAgo },
+        },
+      }),
+      db.quoteRequest.count({
+        where: {
+          createdAt: { gte: weekAgo },
+        },
+      }),
+      db.quoteRequest.count({
+        where: {
+          status: "Paid",
+          createdAt: { gte: weekAgo },
+        },
+      }),
     ]);
 
     return response({
       success: true,
       code: 200,
       data: {
-        operators: {
-          total: totalOperators,
-          pending: pendingOperators,
-          approved: approvedOperators,
+        urgentActions: {
+          pendingOperators,
+          pendingBankVerifications,
+          total: pendingOperators + pendingBankVerifications,
         },
-        tours: {
-          total: totalTours,
-          active: activeTours,
-        },
-        quotes: {
-          total: totalQuotes,
-          pending: pendingQuotes,
-        },
-        users: {
-          total: totalUsers,
-        },
-        blog: {
-          total: totalBlogPosts,
-          published: publishedBlogPosts,
+        weeklyStats: {
+          newOperators,
+          newTours,
+          newQuotes,
+          confirmedBookings,
         },
       },
     });
@@ -83,7 +92,7 @@ export const getAdminDashboardStats = async () => {
   }
 };
 
-export const getRecentActivity = async () => {
+export const getRecentSignups = async () => {
   try {
     const user = await currentUser();
 
@@ -97,23 +106,14 @@ export const getRecentActivity = async () => {
       });
     }
 
-    // Get recent operators
+    // Get signups from last 24 hours
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
     const recentOperators = await db.operatorProfile.findMany({
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
+      where: {
+        createdAt: { gte: yesterday },
       },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    });
-
-    // Get recent quotes
-    const recentQuotes = await db.quoteRequest.findMany({
       include: {
         user: {
           select: {
@@ -121,42 +121,6 @@ export const getRecentActivity = async () => {
             email: true,
           },
         },
-        tour: {
-          select: {
-            title: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    });
-
-    // Get recent tours
-    const recentTours = await db.tour.findMany({
-      include: {
-        operatorProfile: {
-          include: {
-            user: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    });
-
-    // Get recent blog posts
-    const recentBlogPosts = await db.blogPost.findMany({
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        status: true,
-        createdAt: true,
-        publishedAt: true,
       },
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -165,20 +129,15 @@ export const getRecentActivity = async () => {
     return response({
       success: true,
       code: 200,
-      data: {
-        operators: recentOperators,
-        quotes: recentQuotes,
-        tours: recentTours,
-        blogPosts: recentBlogPosts,
-      },
+      data: { operators: recentOperators },
     });
   } catch (error: any) {
-    console.error("Error fetching recent activity:", error);
+    console.error("Error fetching recent signups:", error);
     return response({
       success: false,
       error: {
         code: 500,
-        message: "Failed to fetch recent activity.",
+        message: "Failed to fetch recent signups.",
       },
     });
   }

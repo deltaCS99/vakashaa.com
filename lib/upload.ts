@@ -1,10 +1,10 @@
 // lib/upload.ts
 "use server";
 
-import { supabase, TOUR_IMAGES_BUCKET } from './supabase';
+import { supabase } from './supabase';
 import { randomUUID } from 'crypto';
 
-interface UploadImageResult {
+interface UploadResult {
     success: boolean;
     url?: string;
     error?: string;
@@ -17,18 +17,20 @@ interface FileData {
     data: string; // base64
 }
 
+// Bucket names
+const TOUR_IMAGES_BUCKET = 'tour-images';
+const BLOG_IMAGES_BUCKET = 'blog-images';
+const VERIFICATION_DOCS_BUCKET = 'verification-documents';
+const BANK_DOCS_BUCKET = 'bank-documents';
+
 /**
  * Upload a tour image to Supabase Storage
- * @param fileData - The serializable file data (base64)
- * @param operatorId - The operator's profile ID
- * @param tourId - Optional tour ID (for organizing images)
- * @returns Upload result with public URL
  */
 export async function uploadTourImage(
     fileData: FileData,
     operatorId: string,
     tourId?: string
-): Promise<UploadImageResult> {
+): Promise<UploadResult> {
     try {
         // Validate file type
         const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -40,7 +42,7 @@ export async function uploadTourImage(
         }
 
         // Validate file size (5MB max)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const maxSize = 5 * 1024 * 1024;
         if (fileData.size > maxSize) {
             return {
                 success: false,
@@ -95,15 +97,167 @@ export async function uploadTourImage(
 }
 
 /**
- * Upload a blog image to Supabase Storage
- * @param fileData - The serializable file data (base64)
- * @returns Upload result with public URL
+ * Upload verification document (CIPC, ID, Service Agreement)
+ * Stored in private bucket for security
  */
-export async function uploadBlogImage(fileData: FileData): Promise<UploadImageResult> {
+export async function uploadVerificationDocument(
+    fileData: FileData,
+    operatorId: string,
+    documentType: 'cipc' | 'id' | 'agreement'
+): Promise<UploadResult> {
     try {
-        // Target bucket name
-        const BLOG_IMAGES_BUCKET = 'blog-images';
+        // Validate file type (PDF and images for ID)
+        const validTypes = documentType === 'id'
+            ? ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            : ['application/pdf'];
 
+        if (!validTypes.includes(fileData.type)) {
+            return {
+                success: false,
+                error: documentType === 'id'
+                    ? 'Invalid file type. Please upload PDF or image files.'
+                    : 'Invalid file type. Please upload PDF files only.',
+            };
+        }
+
+        // Validate file size (10MB max)
+        const maxSize = 10 * 1024 * 1024;
+        if (fileData.size > maxSize) {
+            return {
+                success: false,
+                error: 'File too large. Maximum size is 10MB.',
+            };
+        }
+
+        // Generate filename with type and timestamp
+        const fileExt = fileData.name.split('.').pop();
+        const timestamp = Date.now();
+        const fileName = `${documentType}_${timestamp}.${fileExt}`;
+
+        // Create file path: operatorId/documentType/filename
+        const filePath = `${operatorId}/${documentType}/${fileName}`;
+
+        // Convert base64 to Buffer
+        const buffer = Buffer.from(fileData.data, 'base64');
+
+        // Upload to Supabase (private bucket)
+        const { data, error } = await supabase.storage
+            .from(VERIFICATION_DOCS_BUCKET)
+            .upload(filePath, buffer, {
+                contentType: fileData.type,
+                upsert: false,
+            });
+
+        if (error) {
+            console.error('Supabase verification doc upload error:', error);
+            return {
+                success: false,
+                error: 'Failed to upload document. Please try again.',
+            };
+        }
+
+        // Get public URL (note: for private buckets, you may need signed URLs)
+        const { data: { publicUrl } } = supabase.storage
+            .from(VERIFICATION_DOCS_BUCKET)
+            .getPublicUrl(data.path);
+
+        return {
+            success: true,
+            url: publicUrl,
+        };
+    } catch (error) {
+        console.error('Verification document upload error:', error);
+        return {
+            success: false,
+            error: 'An unexpected error occurred during upload.',
+        };
+    }
+}
+
+/**
+ * Upload bank verification document (bank statement/letter)
+ * Stored in private bucket for security
+ */
+export async function uploadBankDocument(
+    fileData: FileData,
+    operatorId: string
+): Promise<UploadResult> {
+    try {
+        // Validate file type (PDF and images)
+        const validTypes = [
+            'application/pdf',
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/webp'
+        ];
+
+        if (!validTypes.includes(fileData.type)) {
+            return {
+                success: false,
+                error: 'Invalid file type. Please upload PDF or image files.',
+            };
+        }
+
+        // Validate file size (10MB max)
+        const maxSize = 10 * 1024 * 1024;
+        if (fileData.size > maxSize) {
+            return {
+                success: false,
+                error: 'File too large. Maximum size is 10MB.',
+            };
+        }
+
+        // Generate filename with timestamp
+        const fileExt = fileData.name.split('.').pop();
+        const timestamp = Date.now();
+        const fileName = `bank_${timestamp}.${fileExt}`;
+
+        // Create file path: operatorId/bank/filename
+        const filePath = `${operatorId}/bank/${fileName}`;
+
+        // Convert base64 to Buffer
+        const buffer = Buffer.from(fileData.data, 'base64');
+
+        // Upload to Supabase (private bucket)
+        const { data, error } = await supabase.storage
+            .from(BANK_DOCS_BUCKET)
+            .upload(filePath, buffer, {
+                contentType: fileData.type,
+                upsert: false,
+            });
+
+        if (error) {
+            console.error('Supabase bank doc upload error:', error);
+            return {
+                success: false,
+                error: 'Failed to upload document. Please try again.',
+            };
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+            .from(BANK_DOCS_BUCKET)
+            .getPublicUrl(data.path);
+
+        return {
+            success: true,
+            url: publicUrl,
+        };
+    } catch (error) {
+        console.error('Bank document upload error:', error);
+        return {
+            success: false,
+            error: 'An unexpected error occurred during upload.',
+        };
+    }
+}
+
+/**
+ * Upload blog image
+ */
+export async function uploadBlogImage(fileData: FileData): Promise<UploadResult> {
+    try {
         // Validate file type
         const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         if (!validTypes.includes(fileData.type)) {
@@ -114,7 +268,7 @@ export async function uploadBlogImage(fileData: FileData): Promise<UploadImageRe
         }
 
         // Validate file size (5MB max)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const maxSize = 5 * 1024 * 1024;
         if (fileData.size > maxSize) {
             return {
                 success: false,
@@ -129,7 +283,7 @@ export async function uploadBlogImage(fileData: FileData): Promise<UploadImageRe
         // Convert base64 to Buffer
         const buffer = Buffer.from(fileData.data, 'base64');
 
-        // Upload to Supabase Storage
+        // Upload to Supabase
         const { data, error } = await supabase.storage
             .from(BLOG_IMAGES_BUCKET)
             .upload(fileName, buffer, {
@@ -163,16 +317,11 @@ export async function uploadBlogImage(fileData: FileData): Promise<UploadImageRe
     }
 }
 
-
 /**
- * Delete a tour image from Supabase Storage
- * @param imageUrl - The full public URL of the image to delete
- * @returns Success status
+ * Delete a tour image
  */
 export async function deleteTourImage(imageUrl: string): Promise<boolean> {
     try {
-        // Extract file path from URL
-        // URL format: https://{project}.supabase.co/storage/v1/object/public/tour-images/{path}
         const urlParts = imageUrl.split(`/${TOUR_IMAGES_BUCKET}/`);
         if (urlParts.length !== 2) {
             console.error('Invalid image URL format');
@@ -181,7 +330,6 @@ export async function deleteTourImage(imageUrl: string): Promise<boolean> {
 
         const filePath = urlParts[1];
 
-        // Delete from Supabase
         const { error } = await supabase.storage
             .from(TOUR_IMAGES_BUCKET)
             .remove([filePath]);
@@ -200,8 +348,6 @@ export async function deleteTourImage(imageUrl: string): Promise<boolean> {
 
 /**
  * Delete multiple tour images
- * @param imageUrls - Array of image URLs to delete
- * @returns Success status
  */
 export async function deleteTourImages(imageUrls: string[]): Promise<boolean> {
     try {
@@ -229,17 +375,21 @@ export async function deleteTourImages(imageUrls: string[]): Promise<boolean> {
 }
 
 /**
- * Get the size of an image file from URL
- * @param imageUrl - The image URL
- * @returns File size in bytes
+ * Helper: Convert File to FileData (for client-side)
  */
-export async function getImageSize(imageUrl: string): Promise<number | null> {
-    try {
-        const response = await fetch(imageUrl, { method: 'HEAD' });
-        const contentLength = response.headers.get('content-length');
-        return contentLength ? parseInt(contentLength, 10) : null;
-    } catch (error) {
-        console.error('Error getting image size:', error);
-        return null;
-    }
+export async function fileToFileData(file: File): Promise<FileData> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            resolve({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: base64,
+            });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }

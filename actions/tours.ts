@@ -34,6 +34,7 @@ export const getTours = async (params: GetToursParams = {}) => {
             isActive: true,
             operatorProfile: {
                 isApproved: true,
+                bankVerificationStatus: "Approved",
             },
         };
 
@@ -144,7 +145,8 @@ export const getTourById = async (id: string) => {
                 id,
                 isActive: true,
                 operatorProfile: {
-                    isApproved: true, // Only show tours from approved operators
+                    isApproved: true,
+                    bankVerificationStatus: "Approved",
                 },
             },
             select: {
@@ -207,6 +209,7 @@ export const getLocalDestinations = async () => {
                 isActive: true,
                 operatorProfile: {
                     isApproved: true,
+                    bankVerificationStatus: "Approved",
                 },
                 countries: {
                     equals: ["South Africa"] // Only tours with SA as the sole country
@@ -256,6 +259,7 @@ export const getInternationalCountries = async () => {
                 isActive: true,
                 operatorProfile: {
                     isApproved: true,
+                    bankVerificationStatus: "Approved",
                 },
                 NOT: {
                     countries: { equals: ["South Africa"] } // Exclude SA-only tours
@@ -303,6 +307,7 @@ export const getDestinations = async () => {
                 isActive: true,
                 operatorProfile: {
                     isApproved: true,
+                    bankVerificationStatus: "Approved",
                 },
             },
             select: {
@@ -352,6 +357,7 @@ export const getCountries = async () => {
                 isActive: true,
                 operatorProfile: {
                     isApproved: true,
+                    bankVerificationStatus: "Approved",
                 },
             },
             select: {
@@ -391,6 +397,7 @@ export const getCategories = async () => {
                 isActive: true,
                 operatorProfile: {
                     isApproved: true,
+                    bankVerificationStatus: "Approved",
                 },
                 category: { not: null },
             },

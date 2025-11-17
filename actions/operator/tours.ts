@@ -2,7 +2,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireApprovedOperator } from "@/lib/operator";
+import { getOperatorProfile } from "@/lib/operator";
+import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 import { deleteTourImages } from "@/lib/upload";
@@ -26,6 +27,7 @@ interface CreateTourParams {
   exclusions?: string[];
   cancellationPolicy?: string;
   images?: string[];
+  profileId?: string; // NEW - for multi-business support
 }
 
 interface UpdateTourParams extends CreateTourParams {
@@ -33,9 +35,26 @@ interface UpdateTourParams extends CreateTourParams {
 }
 
 // Get operator's tours
-export const getOperatorTours = async () => {
+export const getOperatorTours = async (businessId?: string) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: { code: 401, message: "Unauthorized" },
+      });
+    }
+
+    // Get the correct profile (specific business or default)
+    const operatorProfile = await getOperatorProfile(businessId);
+
+    if (!operatorProfile) {
+      return response({
+        success: false,
+        error: { code: 404, message: "Profile not found" },
+      });
+    }
 
     const tours = await db.tour.findMany({
       where: {
@@ -78,8 +97,8 @@ export const getOperatorTours = async () => {
     return response({
       success: false,
       error: {
-        code: error.message.includes("pending approval") ? 403 : 500,
-        message: error.message || "Failed to fetch tours.",
+        code: 500,
+        message: "Failed to fetch tours.",
       },
     });
   }
@@ -88,12 +107,31 @@ export const getOperatorTours = async () => {
 // Get single tour by ID (for editing)
 export const getOperatorTourById = async (tourId: string) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: { code: 401, message: "Unauthorized" },
+      });
+    }
+
+    // Get any of operator's profiles
+    const operatorProfile = await getOperatorProfile();
+
+    if (!operatorProfile) {
+      return response({
+        success: false,
+        error: { code: 404, message: "Profile not found" },
+      });
+    }
 
     const tour = await db.tour.findFirst({
       where: {
         id: tourId,
-        operatorProfileId: operatorProfile.id,
+        operatorProfile: {
+          userId: user.id,
+        },
       },
     });
 
@@ -127,7 +165,24 @@ export const getOperatorTourById = async (tourId: string) => {
 // Create new tour
 export const createTour = async (params: CreateTourParams) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: { code: 401, message: "Unauthorized" },
+      });
+    }
+
+    // Get the correct profile
+    const operatorProfile = await getOperatorProfile(params.profileId);
+
+    if (!operatorProfile) {
+      return response({
+        success: false,
+        error: { code: 404, message: "Profile not found" },
+      });
+    }
 
     // Validate required fields
     if (!params.title || !params.description || !params.duration) {
@@ -199,13 +254,22 @@ export const createTour = async (params: CreateTourParams) => {
 // Update tour
 export const updateTour = async (params: UpdateTourParams) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: { code: 401, message: "Unauthorized" },
+      });
+    }
 
     // Verify tour belongs to operator
     const existingTour = await db.tour.findFirst({
       where: {
         id: params.tourId,
-        operatorProfileId: operatorProfile.id,
+        operatorProfile: {
+          userId: user.id,
+        },
       },
     });
 
@@ -289,13 +353,22 @@ export const updateTour = async (params: UpdateTourParams) => {
 // Toggle tour active status
 export const toggleTourActive = async (tourId: string) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: { code: 401, message: "Unauthorized" },
+      });
+    }
 
     // Verify tour belongs to operator
     const existingTour = await db.tour.findFirst({
       where: {
         id: tourId,
-        operatorProfileId: operatorProfile.id,
+        operatorProfile: {
+          userId: user.id,
+        },
       },
     });
 
@@ -340,13 +413,22 @@ export const toggleTourActive = async (tourId: string) => {
 // Delete tour
 export const deleteTour = async (tourId: string) => {
   try {
-    const operatorProfile = await requireApprovedOperator();
+    const user = await currentUser();
+
+    if (!user || user.role !== "Operator") {
+      return response({
+        success: false,
+        error: { code: 401, message: "Unauthorized" },
+      });
+    }
 
     // Verify tour belongs to operator
     const existingTour = await db.tour.findFirst({
       where: {
         id: tourId,
-        operatorProfileId: operatorProfile.id,
+        operatorProfile: {
+          userId: user.id,
+        },
       },
       include: {
         _count: {

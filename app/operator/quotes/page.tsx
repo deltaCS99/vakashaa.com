@@ -1,13 +1,14 @@
-// app/(operator)/quotes/page.tsx
+// app/operator/quotes/page.tsx
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { getOperatorProfile } from "@/lib/operator";
+import { getOperatorProfile, getOperatorProfiles, getOperatorStatus } from "@/lib/operator";
 import { getOperatorQuoteRequests } from "@/actions/operator/quotes";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle } from "lucide-react";
 import { OperatorQuotesList } from "@/components/operator/operator-quotes-list";
+import { OperatorBusinessSwitcher } from "@/components/operator/operator-business-switcher";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -16,48 +17,32 @@ export const metadata: Metadata = {
   description: "Manage your tour quote requests",
 };
 
-export default async function OperatorQuotesPage() {
+interface PageProps {
+  searchParams: {
+    business?: string;
+  };
+}
+
+export default async function OperatorQuotesPage({ searchParams }: PageProps) {
   const user = await currentUser();
 
   if (!user || user.role !== "Operator") {
     redirect("/login");
   }
 
-  const operatorProfile = await getOperatorProfile();
+  // Get all profiles and current profile
+  const allProfiles = await getOperatorProfiles();
+  const operatorProfile = await getOperatorProfile(searchParams.business);
 
   if (!operatorProfile) {
     redirect("/operator/apply");
   }
 
-  // Check if approved
-  if (!operatorProfile.isApproved) {
-    return (
-      <div className="min-h-screen bg-gray-50/50">
-        <div className="container mx-auto px-4 py-8">
-          <Card className="p-12 text-center">
-            <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center">
-                <AlertCircle className="w-8 h-8 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-2">Account Pending Approval</h3>
-                <p className="text-gray-600 mb-6">
-                  Your operator account is currently under review. You&apos;ll be able to access quote
-                  requests once your account is approved by our team.
-                </p>
-              </div>
-              <Button asChild variant="outline">
-                <Link href="/">Return Home</Link>
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  const status = getOperatorStatus(operatorProfile);
+  const isLive = status === "live";
 
   // Fetch quote requests
-  const result = await getOperatorQuoteRequests();
+  const result = await getOperatorQuoteRequests(searchParams.business);
 
   if (!result.success || !("data" in result)) {
     return (
@@ -72,21 +57,62 @@ export default async function OperatorQuotesPage() {
   const { quoteRequests } = result.data;
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50/50 pb-8">
+      <div className="container mx-auto px-4 py-4 md:py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-gray-900">Quote Requests</h1>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-              {quoteRequests.length} Total
-            </Badge>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Quote Requests</h1>
+            <p className="text-sm md:text-base text-gray-600">
+              View and respond to customer quote requests
+            </p>
           </div>
-          <p className="text-gray-600">View and respond to customer quote requests</p>
+          <OperatorBusinessSwitcher
+            profiles={allProfiles}
+            currentProfileId={operatorProfile.id}
+          />
         </div>
 
+        {/* Status Banner - Show if not live */}
+        {!isLive && (
+          <Card className="mb-6 border-yellow-200 bg-yellow-50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-yellow-100 rounded-lg">
+                  <AlertCircle className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-yellow-900">
+                      {status === "draft" && "Not Accepting Quotes Yet"}
+                      {status === "pending_review" && "Quote Requests Unavailable"}
+                    </h3>
+                    <Badge variant="outline" className="bg-white border-yellow-300">
+                      {status === "draft" && "Draft Mode"}
+                      {status === "pending_review" && "Under Review"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-yellow-800 mb-2">
+                    {status === "draft" &&
+                      "You'll be able to receive and respond to quote requests once your business is verified and live."}
+                    {status === "pending_review" &&
+                      "Your business is being verified. Quote requests will be available once approved."}
+                  </p>
+                  {status === "draft" && (
+                    <Link href={`/operator/settings?tab=verification${searchParams.business ? `&business=${searchParams.business}` : ''}`}>
+                      <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 mt-2">
+                        Complete Verification
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Quotes List */}
-        <OperatorQuotesList quoteRequests={quoteRequests} />
+        {isLive && <OperatorQuotesList quoteRequests={quoteRequests} />}
       </div>
     </div>
   );

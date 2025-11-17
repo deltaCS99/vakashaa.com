@@ -21,6 +21,7 @@ export function OperatorsFilters({ currentStatus, currentSearch }: OperatorsFilt
     const handleStatusChange = (status: string) => {
         const params = new URLSearchParams();
         params.set("status", status);
+        if (search) params.set("search", search);
         params.delete("page");
         router.push(`/admin/operators?${params.toString()}`);
     };
@@ -28,11 +29,8 @@ export function OperatorsFilters({ currentStatus, currentSearch }: OperatorsFilt
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         const params = new URLSearchParams();
-        if (search) {
-            params.set("search", search);
-        } else {
-            params.delete("search");
-        }
+        params.set("status", currentStatus);
+        if (search) params.set("search", search);
         params.delete("page");
         router.push(`/admin/operators?${params.toString()}`);
     };
@@ -50,7 +48,8 @@ export function OperatorsFilters({ currentStatus, currentSearch }: OperatorsFilt
             <Tabs value={currentStatus} onValueChange={handleStatusChange}>
                 <TabsList>
                     <TabsTrigger value="all">All</TabsTrigger>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
+                    <TabsTrigger value="pending">Pending Review</TabsTrigger>
+                    <TabsTrigger value="bank_pending">Bank Pending</TabsTrigger>
                     <TabsTrigger value="approved">Approved</TabsTrigger>
                 </TabsList>
             </Tabs>

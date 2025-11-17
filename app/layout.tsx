@@ -7,6 +7,8 @@ import Footer from "@/app/_components/footer";
 import { LanguageProvider } from "@/contexts/language-context";
 import { Toaster } from "@/components/ui/sonner";
 import { currentUser } from "@/lib/auth";
+import NextTopLoader from "nextjs-toploader";
+import { PHProvider } from "@/contexts/posthog";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,7 +25,6 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
-
 export default async function RootLayout({
   children
 }: {
@@ -32,14 +33,28 @@ export default async function RootLayout({
   const user = await currentUser();
   return (
     <html lang="en">
-      <LanguageProvider>
-        <body className={inter.className}>
-          <Navbar user={user} />
-          <Toaster position="bottom-left" richColors theme="light" />
-          {children}
-          <Footer />
-        </body>
-      </LanguageProvider>
+      <body className={inter.className}>
+        <LanguageProvider>
+          <NextTopLoader
+            color="#f97316"
+            initialPosition={0.08}
+            crawlSpeed={200}
+            height={3}
+            crawl={true}
+            showSpinner={false}
+            easing="ease"
+            speed={200}
+            shadow="0 0 10px #f97316,0 0 5px #f97316"
+            zIndex={9999}
+          />
+          <PHProvider>
+            <Navbar user={user} />
+            <Toaster position="bottom-left" richColors theme="light" />
+            {children}
+            <Footer />
+          </PHProvider>
+        </LanguageProvider>
+      </body>
     </html>
   );
 }
