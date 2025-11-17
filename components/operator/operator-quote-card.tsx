@@ -68,6 +68,21 @@ const STATUS_CONFIG = {
         icon: CheckCircle2,
         className: "bg-green-100 text-green-800 border-green-200",
     },
+    [QuoteStatus.Completed]: {
+        label: "Completed",
+        icon: CheckCircle2,
+        className: "bg-green-100 text-green-800 border-green-200",
+    },
+    [QuoteStatus.Disputed]: {
+        label: "Disputed",
+        icon: AlertCircle,
+        className: "bg-orange-100 text-orange-800 border-orange-200",
+    },
+    [QuoteStatus.Refunded]: {
+        label: "Refunded",
+        icon: XCircle,
+        className: "bg-gray-100 text-gray-800 border-gray-200",
+    },
     [QuoteStatus.Rejected]: {
         label: "Rejected",
         icon: XCircle,
@@ -83,7 +98,7 @@ const STATUS_CONFIG = {
         icon: AlertCircle,
         className: "bg-orange-100 text-orange-800 border-orange-200",
     },
-};
+} as const;
 
 export function OperatorQuoteCard({ quote }: OperatorQuoteCardProps) {
     const statusConfig = STATUS_CONFIG[quote.status];
