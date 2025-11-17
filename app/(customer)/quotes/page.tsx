@@ -41,7 +41,7 @@ export default async function QuotesPage() {
       QuoteStatus.Paid,
       QuoteStatus.Completed,
       QuoteStatus.Disputed,
-      QuoteStatus.Refunded
+      QuoteStatus.Refunded as QuoteStatus
     ].includes(quote.status)
   );
 
