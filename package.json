@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "next dev",
     "test-blog": "tsx scripts/test-blog.ts",
-    "build": "npm run prisma:clean && next build",
+    "build": "prisma generate && prisma migrate deploy && prisma db seed && next build",
     "start": "next start",
     "lint": "next lint",
     "knip": "knip",

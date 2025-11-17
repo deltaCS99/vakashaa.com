@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
-import { sendOperatorWhatsAppNotification, WHATSAPP_TEMPLATES } from "@/lib/whatsapp";
+import { sendOperatorWhatsAppNotification } from "@/lib/whatsapp";
 
 
 // Get all operators with filters
@@ -522,7 +522,7 @@ export const sendOperatorWhatsApp = async (params: {
             success: true,
             code: 200,
             data: {
-                messageId: result.messageId,
+                messageId: (result as { success: true; messageId?: string }).messageId,
                 message: "WhatsApp notification sent successfully",
             },
         });
