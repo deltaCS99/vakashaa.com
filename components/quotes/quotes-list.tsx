@@ -67,8 +67,13 @@ export function QuotesList({ quoteRequests }: QuotesListProps) {
     const filteredQuotes = quoteRequests.filter((quote) => {
         // Status filter
         if (selectedFilter === "active") {
-            // Active = Pending, Quoted, or Accepted
-            if (![QuoteStatus.Pending, QuoteStatus.Quoted, QuoteStatus.Accepted].includes(quote.status)) {
+            // ✅ Fix: Use array of strings instead of enum values for includes check
+            const activeStatuses: QuoteStatus[] = [
+                QuoteStatus.Pending,
+                QuoteStatus.Quoted,
+                QuoteStatus.Accepted
+            ];
+            if (!activeStatuses.includes(quote.status)) {
                 return false;
             }
         } else if (selectedFilter === "needs_action") {
@@ -96,11 +101,15 @@ export function QuotesList({ quoteRequests }: QuotesListProps) {
     });
 
     // Count by status
+    const activeStatuses: QuoteStatus[] = [
+        QuoteStatus.Pending,
+        QuoteStatus.Quoted,
+        QuoteStatus.Accepted
+    ];
+
     const statusCounts = {
         all: quoteRequests.length,
-        active: quoteRequests.filter(q =>
-            [QuoteStatus.Pending, QuoteStatus.Quoted, QuoteStatus.Accepted].includes(q.status)
-        ).length,
+        active: quoteRequests.filter(q => activeStatuses.includes(q.status)).length,
         needs_action: quoteRequests.filter(q => isExpiringSoon(q)).length,
         [QuoteStatus.Pending]: quoteRequests.filter(q => q.status === QuoteStatus.Pending).length,
         [QuoteStatus.Quoted]: quoteRequests.filter(q => q.status === QuoteStatus.Quoted).length,

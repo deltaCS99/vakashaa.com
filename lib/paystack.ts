@@ -17,14 +17,6 @@ interface PaystackResponse<T> {
     data: T;
 }
 
-interface SubaccountData {
-    subaccount_code: string;
-    business_name: string;
-    account_number: string;
-    bank_code: string;
-    percentage_charge: number;
-}
-
 interface TransactionData {
     authorization_url: string;
     access_code: string;
@@ -61,7 +53,7 @@ async function paystackRequest<T>(
 }
 
 /**
- * Verify bank account details
+ * Verify bank account details (for operator verification)
  */
 export async function verifyBankAccount(
     accountNumber: string,
@@ -84,49 +76,11 @@ export async function verifyBankAccount(
 }
 
 /**
- * Create a subaccount for an operator
- */
-export async function createSubaccount(params: {
-    businessName: string;
-    bankCode: string;
-    accountNumber: string;
-    percentageCharge: number;
-    description?: string;
-}): Promise<string> {
-    try {
-        // First verify the account
-        const verified = await verifyBankAccount(params.accountNumber, params.bankCode);
-
-        console.log(`Verified account: ${verified.accountName} - ${verified.accountNumber}`);
-
-        // Create subaccount
-        const result = await paystackRequest<SubaccountData>(
-            "/subaccount",
-            "POST",
-            {
-                business_name: params.businessName,
-                bank_code: params.bankCode,
-                account_number: params.accountNumber,
-                percentage_charge: params.percentageCharge,
-                description: params.description || `Subaccount for ${params.businessName}`,
-            }
-        );
-
-        return result.data.subaccount_code;
-    } catch (error) {
-        console.error("Error creating subaccount:", error);
-        throw error;
-    }
-}
-
-/**
- * Initialize a split payment transaction
+ * Initialize a payment transaction (100% to platform)
  */
 export async function initializeTransaction(params: {
     email: string;
     amount: number; // Amount in cents
-    subaccountCode: string;
-    transactionCharge: number; // Flat fee for main account in cents
     reference?: string;
     callbackUrl?: string;
     metadata?: Record<string, any>;
@@ -138,9 +92,6 @@ export async function initializeTransaction(params: {
             {
                 email: params.email,
                 amount: params.amount,
-                subaccount: params.subaccountCode,
-                transaction_charge: params.transactionCharge,
-                bearer: "subaccount", // Operator pays Paystack fees
                 reference: params.reference,
                 callback_url: params.callbackUrl,
                 metadata: params.metadata,
@@ -166,6 +117,8 @@ export async function verifyTransaction(reference: string): Promise<{
     amount: number;
     paidAt: Date | null;
     reference: string;
+    channel: string;
+    currency: string;
 }> {
     try {
         const result = await paystackRequest<any>(
@@ -178,6 +131,8 @@ export async function verifyTransaction(reference: string): Promise<{
             amount: result.data.amount,
             paidAt: result.data.paid_at ? new Date(result.data.paid_at) : null,
             reference: result.data.reference,
+            channel: result.data.channel,
+            currency: result.data.currency,
         };
     } catch (error) {
         console.error("Error verifying transaction:", error);
@@ -186,80 +141,12 @@ export async function verifyTransaction(reference: string): Promise<{
 }
 
 /**
- * Get or create subaccount for an operator
- * Returns the subaccount code, creating one if it doesn't exist
- */
-export async function getOrCreateOperatorSubaccount(
-    operatorProfileId: string
-): Promise<string> {
-    try {
-        // Get operator profile with bank details
-        const operatorProfile = await db.operatorProfile.findUnique({
-            where: { id: operatorProfileId },
-            select: {
-                id: true,
-                businessName: true,
-                paystackSubaccountCode: true,
-                bankName: true,
-                bankCode: true,
-                accountNumber: true,
-                accountName: true,
-            },
-        });
-
-        if (!operatorProfile) {
-            throw new Error("Operator profile not found");
-        }
-
-        // Return existing subaccount if available
-        if (operatorProfile.paystackSubaccountCode) {
-            return operatorProfile.paystackSubaccountCode;
-        }
-
-        // Validate bank details
-        if (!operatorProfile.bankCode || !operatorProfile.accountNumber) {
-            throw new Error(
-                "Operator bank details are incomplete. Please update bank information."
-            );
-        }
-
-        // Get platform commission from settings
-        const commissionSetting = await db.setting.findUnique({
-            where: { key: "platform_commission_rate" },
-        });
-
-        const commissionRate = commissionSetting
-            ? parseFloat(commissionSetting.value)
-            : 7; // Default 7%
-
-        // Create subaccount
-        const subaccountCode = await createSubaccount({
-            businessName: operatorProfile.businessName,
-            bankCode: operatorProfile.bankCode,
-            accountNumber: operatorProfile.accountNumber,
-            percentageCharge: commissionRate,
-            description: `Tour operator: ${operatorProfile.businessName}`,
-        });
-
-        // Save subaccount code to database
-        await db.operatorProfile.update({
-            where: { id: operatorProfileId },
-            data: { paystackSubaccountCode: subaccountCode },
-        });
-
-        return subaccountCode;
-    } catch (error) {
-        console.error("Error getting/creating operator subaccount:", error);
-        throw error;
-    }
-}
-
-/**
  * Generate payment link for a quote request
+ * All payments go to platform account - payouts handled manually
  */
 export async function generateQuotePaymentLink(quoteRequestId: string): Promise<string> {
     try {
-        // Get quote request with tour and operator details
+        // Get quote request with tour and user details
         const quoteRequest = await db.quoteRequest.findUnique({
             where: { id: quoteRequestId },
             include: {
@@ -284,22 +171,9 @@ export async function generateQuotePaymentLink(quoteRequestId: string): Promise<
             throw new Error("Quote must be accepted before generating payment link");
         }
 
-        // Get or create operator's subaccount
-        const subaccountCode = await getOrCreateOperatorSubaccount(
-            quoteRequest.tour.operatorProfileId
-        );
-
-        // Get platform commission from settings
-        const commissionSetting = await db.setting.findUnique({
-            where: { key: "platform_commission_rate" },
-        });
-
-        const commissionRate = commissionSetting
-            ? parseFloat(commissionSetting.value)
-            : 7; // Default 7%
-
-        // Calculate flat commission (in cents)
-        const transactionCharge = Math.round((quoteRequest.quotedPrice * commissionRate) / 100);
+        if (!quoteRequest.user.email) {
+            throw new Error("Customer email is required for payment");
+        }
 
         // Generate unique reference
         const reference = `BK-${quoteRequest.reference}-${Date.now()}`;
@@ -312,20 +186,24 @@ export async function generateQuotePaymentLink(quoteRequestId: string): Promise<
         const callbackUrl = callbackUrlSetting?.value ||
             `${process.env.NEXT_PUBLIC_APP_URL}/quotes/${quoteRequestId}/payment/callback`;
 
-        // Initialize transaction
+        // Initialize transaction (100% to platform)
         const transaction = await initializeTransaction({
-            email: quoteRequest.user.email!,
+            email: quoteRequest.user.email,
             amount: quoteRequest.quotedPrice,
-            subaccountCode: subaccountCode,
-            transactionCharge: transactionCharge,
             reference: reference,
             callbackUrl: callbackUrl,
             metadata: {
                 quoteRequestId: quoteRequest.id,
                 quoteReference: quoteRequest.reference,
+                tourId: quoteRequest.tour.id,
                 tourTitle: quoteRequest.tour.title,
-                customerName: quoteRequest.user.name,
+                operatorProfileId: quoteRequest.tour.operatorProfileId,
                 operatorName: quoteRequest.tour.operatorProfile.businessName,
+                customerName: quoteRequest.user.name,
+                customerEmail: quoteRequest.user.email,
+                adults: quoteRequest.adults,
+                children: quoteRequest.children,
+                tourDate: quoteRequest.confirmedTourDate?.toISOString(),
             },
         });
 
@@ -348,23 +226,48 @@ export async function generateQuotePaymentLink(quoteRequestId: string): Promise<
 /**
  * Handle payment webhook/callback
  */
-export async function handlePaymentCallback(reference: string): Promise<void> {
+export async function handlePaymentCallback(reference: string): Promise<{
+    success: boolean;
+    quoteRequestId?: string;
+    message: string;
+}> {
     try {
         // Verify transaction with Paystack
         const transaction = await verifyTransaction(reference);
 
         if (transaction.status !== "success") {
             console.log(`Transaction ${reference} not successful: ${transaction.status}`);
-            return;
+            return {
+                success: false,
+                message: `Payment not successful: ${transaction.status}`,
+            };
         }
 
         // Find quote request by payment reference
         const quoteRequest = await db.quoteRequest.findFirst({
             where: { paymentReference: reference },
+            include: {
+                tour: {
+                    include: {
+                        operatorProfile: true,
+                    },
+                },
+                user: true,
+            },
         });
 
         if (!quoteRequest) {
             throw new Error(`Quote request not found for reference: ${reference}`);
+        }
+
+        // Check if already paid (prevent duplicate processing)
+        if (quoteRequest.status === "Paid") {
+            console.log(`Quote ${quoteRequest.reference} already marked as paid`);
+            return {
+                success: true,
+                quoteRequestId: quoteRequest.id,
+                message: "Payment already processed",
+            };
         }
 
         // Update quote to paid status
@@ -377,11 +280,47 @@ export async function handlePaymentCallback(reference: string): Promise<void> {
             },
         });
 
-        console.log(`Payment successful for quote ${quoteRequest.reference}`);
+        console.log(`✅ Payment successful for quote ${quoteRequest.reference}`);
+        console.log(`   Amount: R${(transaction.amount / 100).toLocaleString()}`);
+        console.log(`   Operator: ${quoteRequest.tour.operatorProfile.businessName}`);
+        console.log(`   Customer: ${quoteRequest.user.name}`);
 
         // TODO: Send confirmation emails to customer and operator
+        // TODO: Create notification for admin dashboard
+        // TODO: Add to payout queue for operator
+
+        return {
+            success: true,
+            quoteRequestId: quoteRequest.id,
+            message: "Payment processed successfully",
+        };
     } catch (error) {
-        console.error("Error handling payment callback:", error);
+        console.error("❌ Error handling payment callback:", error);
         throw error;
+    }
+}
+
+/**
+ * Get list of South African banks for bank account verification
+ */
+export async function getSouthAfricanBanks(): Promise<Array<{
+    id: number;
+    name: string;
+    code: string;
+}>> {
+    try {
+        const result = await paystackRequest<any>(
+            "/bank?country=south%20africa",
+            "GET"
+        );
+
+        return result.data.map((bank: any) => ({
+            id: bank.id,
+            name: bank.name,
+            code: bank.code,
+        }));
+    } catch (error) {
+        console.error("Error fetching banks:", error);
+        throw new Error("Failed to fetch bank list");
     }
 }
