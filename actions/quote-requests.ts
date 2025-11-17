@@ -383,6 +383,65 @@ export const sendQuoteMessage = async (quoteRequestId: string, message: string) 
     }
 };
 
+// Mark messages as read
+export const markQuoteMessagesAsRead = async (quoteRequestId: string) => {
+    try {
+        const user = await currentUser();
+
+        if (!user) {
+            return response({
+                success: false,
+                error: { code: 401, message: "Unauthorized" },
+            });
+        }
+
+        // Verify quote belongs to user
+        const quoteRequest = await db.quoteRequest.findFirst({
+            where: {
+                id: quoteRequestId,
+                userId: user.id,
+            },
+        });
+
+        if (!quoteRequest) {
+            return response({
+                success: false,
+                error: {
+                    code: 404,
+                    message: "Quote request not found.",
+                },
+            });
+        }
+
+        // Mark all unread messages from operator as read
+        await db.quoteMessage.updateMany({
+            where: {
+                quoteRequestId,
+                senderType: "operator",
+                readAt: null, // Only update unread messages
+            },
+            data: {
+                readAt: new Date(),
+            },
+        });
+
+        return response({
+            success: true,
+            code: 200,
+            data: { marked: true },
+        });
+    } catch (error) {
+        console.error("Error marking messages as read:", error);
+        return response({
+            success: false,
+            error: {
+                code: 500,
+                message: "Failed to mark messages as read.",
+            },
+        });
+    }
+};
+
 // Accept a quote
 export const acceptQuote = async (quoteRequestId: string) => {
     try {

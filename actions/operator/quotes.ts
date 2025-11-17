@@ -376,3 +376,77 @@ export const sendOperatorMessage = async (
         });
     }
 };
+
+// Mark messages as read (operator)
+export const markOperatorQuoteMessagesAsRead = async (quoteRequestId: string) => {
+    try {
+        const user = await currentUser();
+
+        if (!user || user.role !== "Operator") {
+            return response({
+                success: false,
+                error: { code: 401, message: "Unauthorized" },
+            });
+        }
+
+        // Get operator profile
+        const operatorProfile = await getOperatorProfile();
+
+        if (!operatorProfile) {
+            return response({
+                success: false,
+                error: {
+                    code: 404,
+                    message: "Operator profile not found.",
+                },
+            });
+        }
+
+        // Verify quote belongs to operator
+        const quoteRequest = await db.quoteRequest.findFirst({
+            where: {
+                id: quoteRequestId,
+                tour: {
+                    operatorProfileId: operatorProfile.id,
+                },
+            },
+        });
+
+        if (!quoteRequest) {
+            return response({
+                success: false,
+                error: {
+                    code: 404,
+                    message: "Quote request not found.",
+                },
+            });
+        }
+
+        // Mark all unread messages from customer as read
+        await db.quoteMessage.updateMany({
+            where: {
+                quoteRequestId,
+                senderType: "customer",
+                readAt: null, // Only update unread messages
+            },
+            data: {
+                readAt: new Date(),
+            },
+        });
+
+        return response({
+            success: true,
+            code: 200,
+            data: { marked: true },
+        });
+    } catch (error) {
+        console.error("Error marking messages as read:", error);
+        return response({
+            success: false,
+            error: {
+                code: 500,
+                message: "Failed to mark messages as read.",
+            },
+        });
+    }
+};

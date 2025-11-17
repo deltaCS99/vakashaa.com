@@ -14,8 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, User, Building2, Loader2 } from "lucide-react";
-import { sendQuoteMessage } from "@/actions/quote-requests";
-import { sendOperatorMessage } from "@/actions/operator/quotes";
+import { sendQuoteMessage, markQuoteMessagesAsRead } from "@/actions/quote-requests";
+import { sendOperatorMessage, markOperatorQuoteMessagesAsRead } from "@/actions/operator/quotes";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ interface Message {
     message: string;
     senderId: string;
     senderType: string;
+    readAt: Date | null; // ✅ Add readAt
     createdAt: Date;
 }
 
@@ -31,20 +32,40 @@ interface QuoteChatWidgetProps {
     quoteRequestId: string;
     messages: Message[];
     currentUserId: string;
-    userRole?: "customer" | "operator"; // ✅ Add role prop
+    userRole?: "customer" | "operator";
 }
 
 export function QuoteChatWidget({
     quoteRequestId,
     messages,
     currentUserId,
-    userRole = "customer", // ✅ Default to customer for backward compatibility
+    userRole = "customer",
 }: QuoteChatWidgetProps) {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [newMessage, setNewMessage] = useState("");
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // ✅ Mark messages as read when chat opens
+    useEffect(() => {
+        if (isOpen) {
+            const markAsRead = async () => {
+                try {
+                    if (userRole === "operator") {
+                        await markOperatorQuoteMessagesAsRead(quoteRequestId);
+                    } else {
+                        await markQuoteMessagesAsRead(quoteRequestId);
+                    }
+                    router.refresh(); // Refresh to update unread count
+                } catch (error) {
+                    console.error("Error marking messages as read:", error);
+                }
+            };
+
+            markAsRead();
+        }
+    }, [isOpen, quoteRequestId, userRole, router]);
 
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -63,7 +84,6 @@ export function QuoteChatWidget({
         setIsSending(true);
 
         try {
-            // ✅ Call the appropriate action based on user role
             const result = userRole === "operator"
                 ? await sendOperatorMessage(quoteRequestId, newMessage.trim())
                 : await sendQuoteMessage(quoteRequestId, newMessage.trim());
@@ -82,14 +102,14 @@ export function QuoteChatWidget({
         }
     };
 
-    // ✅ Count unread messages based on role
+    // ✅ Count ONLY unread messages from other party
     const unreadCount = messages.filter((m) => {
         if (userRole === "customer") {
-            // Customer: count messages from operator
-            return m.senderType === "operator" && m.senderId !== currentUserId;
+            // Customer: count unread messages from operator
+            return m.senderType === "operator" && m.readAt === null;
         } else {
-            // Operator: count messages from customer
-            return m.senderType === "customer" && m.senderId !== currentUserId;
+            // Operator: count unread messages from customer
+            return m.senderType === "customer" && m.readAt === null;
         }
     }).length;
 

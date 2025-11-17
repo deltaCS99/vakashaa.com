@@ -111,7 +111,7 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
     const { quoteRequest } = result.data;
 
     // Redirect to bookings page if quote is paid or beyond
-    if ([QuoteStatus.Paid, QuoteStatus.Completed, QuoteStatus.Disputed, QuoteStatus.Refunded].includes(quoteRequest.status)) {
+    if ([QuoteStatus.Paid, QuoteStatus.Completed, QuoteStatus.Disputed, QuoteStatus.Refunded as QuoteStatus].includes(quoteRequest.status)) {
         redirect(`/bookings/${quoteRequest.id}`);
     }
 
