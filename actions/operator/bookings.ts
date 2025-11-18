@@ -32,7 +32,7 @@ export const getOperatorBookings = async (businessId?: string) => {
         const bookings = await db.quoteRequest.findMany({
             where: {
                 status: {
-                    in: [QuoteStatus.Paid, QuoteStatus.Completed, QuoteStatus.Disputed],
+                    in: [QuoteStatus.Paid, QuoteStatus.Completed, QuoteStatus.Disputed, QuoteStatus.Refunded],
                 },
                 tour: {
                     operatorProfileId: operatorProfile.id,

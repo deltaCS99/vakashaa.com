@@ -43,6 +43,14 @@ export const getOperatorQuoteRequests = async (businessId?: string) => {
                 tour: {
                     operatorProfileId: operatorProfile.id,
                 },
+                status: {
+                    notIn: [
+                        QuoteStatus.Paid,
+                        QuoteStatus.Completed,
+                        QuoteStatus.Disputed,
+                        QuoteStatus.Refunded,
+                    ],
+                },
             },
             include: {
                 tour: {

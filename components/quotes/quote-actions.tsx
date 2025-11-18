@@ -73,17 +73,30 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
     setIsAccepting(true);
     try {
       const result = await acceptQuote(quoteRequest.id);
-      if (result.success) {
-        toast.success("Quote accepted successfully! Proceeding to payment...");
-        router.refresh();
+
+      if (result.success && 'data' in result && result.data.paymentUrl) {
+        toast.success("Quote accepted! Redirecting to payment...");
+
+        // Close the dialog
         setShowAcceptDialog(false);
+
+        // Small delay to show the success message, then redirect
+        setTimeout(() => {
+          window.location.href = result.data.paymentUrl;
+        }, 1000);
+
+        // Keep loading state active since user is being redirected
+        // Don't set isAccepting to false
       } else if (!result.success && 'error' in result) {
         toast.error(result.error.message || "Failed to accept quote");
+        setIsAccepting(false);
+      } else {
+        toast.error("Unexpected response from server");
+        setIsAccepting(false);
       }
     } catch (error) {
       console.error("Error accepting quote:", error);
       toast.error("Something went wrong. Please try again.");
-    } finally {
       setIsAccepting(false);
     }
   };
@@ -224,50 +237,70 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
         {/* ACCEPTED */}
         {quoteRequest.status === QuoteStatus.Accepted && (
           <>
-            <div className="text-center py-4">
-              <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-purple-500" />
-              <h3 className="font-semibold text-lg mb-2">Quote Accepted!</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Complete payment to confirm your booking.
-              </p>
-            </div>
-
-            {quoteRequest.quotedPrice && (
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <p className="text-sm text-gray-600 mb-1">Amount Due</p>
-                <p className="text-2xl font-bold">
-                  {formatPrice(quoteRequest.quotedPrice)}
+            {/* Check if quote has expired */}
+            {quoteRequest.quoteExpiresAt && new Date() > quoteRequest.quoteExpiresAt ? (
+              // EXPIRED STATE
+              <div className="text-center py-4">
+                <AlertCircle className="w-12 h-12 mx-auto mb-4 text-orange-400" />
+                <h3 className="font-semibold text-lg mb-2">Quote Expired</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  This quote has expired. Please request a new quote from the operator.
                 </p>
+                <Button size="lg" className="w-full" asChild>
+                  <a href={`/tours/${quoteRequest.tour.id}`}>
+                    Request New Quote
+                  </a>
+                </Button>
               </div>
-            )}
-
-            <Separator />
-
-            {/* Payment Button */}
-            {quoteRequest.paymentLink ? (
-              <Button size="lg" className="w-full" asChild>
-                <a href={quoteRequest.paymentLink} target="_blank" rel="noopener noreferrer">
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  Pay Now
-                  <ExternalLink className="w-4 h-4 ml-2" />
-                </a>
-              </Button>
             ) : (
-              <Button size="lg" className="w-full" disabled>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generating Payment Link...
-              </Button>
-            )}
+              // ACTIVE STATE - Can still pay
+              <>
+                <div className="text-center py-4">
+                  <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-purple-500" />
+                  <h3 className="font-semibold text-lg mb-2">Quote Accepted!</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Complete payment to confirm your booking.
+                  </p>
+                </div>
 
-            <Button
-              size="lg"
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowCancelDialog(true)}
-            >
-              <Ban className="w-4 h-4 mr-2" />
-              Cancel Booking
-            </Button>
+                {quoteRequest.quotedPrice && (
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-gray-600 mb-1">Amount Due</p>
+                    <p className="text-2xl font-bold">
+                      {formatPrice(quoteRequest.quotedPrice)}
+                    </p>
+                  </div>
+                )}
+
+                <Separator />
+
+                {/* Payment Button */}
+                {quoteRequest.paymentLink ? (
+                  <Button size="lg" className="w-full" asChild>
+                    <a href={quoteRequest.paymentLink} target="_blank" rel="noopener noreferrer">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Pay Now
+                      <ExternalLink className="w-4 h-4 ml-2" />
+                    </a>
+                  </Button>
+                ) : (
+                  <Button size="lg" className="w-full" disabled>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating Payment Link...
+                  </Button>
+                )}
+
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowCancelDialog(true)}
+                >
+                  <Ban className="w-4 h-4 mr-2" />
+                  Cancel Booking
+                </Button>
+              </>
+            )}
           </>
         )}
 

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { QuoteStatus } from "@prisma/client";
+import { initializePayment } from "@/lib/paystack";
 
 interface CreateQuoteRequestParams {
     tourId: string;
@@ -450,69 +451,103 @@ export const acceptQuote = async (quoteRequestId: string) => {
         if (!user) {
             return response({
                 success: false,
-                error: {
-                    code: 401,
-                    message: "You must be logged in.",
-                },
+                error: { code: 401, message: "You must be logged in." },
             });
         }
 
-        // Verify quote exists and belongs to user
+        // Get quote with tour details
         const quoteRequest = await db.quoteRequest.findFirst({
             where: {
                 id: quoteRequestId,
                 userId: user.id,
                 status: QuoteStatus.Quoted,
             },
+            include: {
+                tour: true,
+            },
         });
 
         if (!quoteRequest) {
             return response({
                 success: false,
-                error: {
-                    code: 404,
-                    message: "Quote not found or cannot be accepted.",
-                },
+                error: { code: 404, message: "Quote not found or cannot be accepted." },
             });
         }
 
-        // Check if quote has expired
+        if (!quoteRequest.quotedPrice) {
+            return response({
+                success: false,
+                error: { code: 400, message: "Quote has no price set." },
+            });
+        }
+
+        // Check expiry
         if (quoteRequest.quoteExpiresAt && new Date() > quoteRequest.quoteExpiresAt) {
             return response({
                 success: false,
-                error: {
-                    code: 400,
-                    message: "This quote has expired. Please request a new quote.",
-                },
+                error: { code: 400, message: "This quote has expired." },
             });
         }
 
-        // Update status to Accepted
-        const updatedQuote = await db.quoteRequest.update({
+        // Generate booking reference: BK-2025XXX (year + 3 random digits)
+        const year = new Date().getFullYear();
+        const randomNumber = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        const paymentReference = `BK-${year}${randomNumber}`;
+
+        // Check if reference already exists (unlikely but possible)
+        const existingBooking = await db.quoteRequest.findFirst({
+            where: { paymentReference: paymentReference },
+        });
+
+        // If exists, add timestamp to make it unique
+        const finalReference = existingBooking
+            ? `${paymentReference}-${Date.now().toString().slice(-4)}`
+            : paymentReference;
+
+        // Initialize payment with Paystack
+        const payment = await initializePayment({
+            email: user.email!,
+            amount: quoteRequest.quotedPrice,
+            reference: finalReference,
+            metadata: {
+                quoteRequestId: quoteRequest.id,
+                tourId: quoteRequest.tour.id,
+                tourTitle: quoteRequest.tour.title,
+                customerName: user.name,
+            },
+        });
+
+        if (!payment.success) {
+            return response({
+                success: false,
+                error: { code: 500, message: "Failed to initialize payment." },
+            });
+        }
+
+        // Update quote with payment details
+        await db.quoteRequest.update({
             where: { id: quoteRequestId },
             data: {
                 status: QuoteStatus.Accepted,
                 acceptedAt: new Date(),
+                paymentReference: payment.reference,
+                paymentLink: payment.authorizationUrl,
             },
         });
-
-        // TODO: Generate payment link
-        // TODO: Send confirmation email to customer
-        // TODO: Notify operator
 
         return response({
             success: true,
             code: 200,
-            data: { quoteRequest: updatedQuote },
+            data: {
+                paymentUrl: payment.authorizationUrl,
+                reference: payment.reference,
+            },
         });
     } catch (error) {
         console.error("Error accepting quote:", error);
         return response({
             success: false,
-            error: {
-                code: 500,
-                message: "Failed to accept quote.",
-            },
+            error: { code: 500, message: "Failed to accept quote." },
         });
     }
 };

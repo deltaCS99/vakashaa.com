@@ -45,9 +45,9 @@ const STATUS_FILTERS = [
     { label: "Pending", value: QuoteStatus.Pending },
     { label: "Quoted", value: QuoteStatus.Quoted },
     { label: "Accepted", value: QuoteStatus.Accepted },
-    { label: "Paid", value: QuoteStatus.Paid },
     { label: "Rejected", value: QuoteStatus.Rejected },
     { label: "Cancelled", value: QuoteStatus.Cancelled },
+    { label: "Expired", value: QuoteStatus.Expired },
 ];
 
 export function OperatorQuotesList({ quoteRequests }: OperatorQuotesListProps) {
