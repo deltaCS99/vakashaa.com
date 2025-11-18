@@ -1,79 +1,70 @@
 // middleware.ts
 import { auth } from "@/auth";
 
+// Inline route definitions to avoid bundling issues
+const publicRoutes = ["/verify"];
+const authRoutes = [
+  "/login",
+  "/register",
+  "/error",
+  "/resend",
+  "/reset",
+  "/new-password",
+  "/two-factor"
+];
+const apiAuthPrefix = "/api/auth";
+const DEFAULT_LOGIN_REDIRECT = "/";
+
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
-  const role = req.auth?.user?.role;
-  const path = nextUrl.pathname;
+  const userRole = req.auth?.user?.role;
 
-  // Skip API auth routes
-  if (path.startsWith("/api/auth")) return null;
+  const isApiAuthRoute = nextUrl.pathname.startsWith(apiAuthPrefix);
+  const isPublicRoute =
+    publicRoutes.includes(nextUrl.pathname) ||
+    nextUrl.pathname === "/" ||
+    nextUrl.pathname.startsWith("/tours") ||
+    nextUrl.pathname.startsWith("/blog") ||
+    nextUrl.pathname.startsWith("/about");
+  const isAuthRoute = authRoutes.includes(nextUrl.pathname);
 
-  // Public routes (inline - from your routes.ts)
-  const isPublic =
-    path === "/" ||
-    path === "/verify" ||
-    path.startsWith("/tours") ||
-    path.startsWith("/blog") ||
-    path.startsWith("/about");
-
-  if (isPublic) return null;
-
-  // Auth routes (inline - from your routes.ts)
-  const authRoutes = [
-    "/login",
-    "/register",
-    "/error",
-    "/resend",
-    "/reset",
-    "/new-password",
-    "/two-factor"
-  ];
-
-  const isAuthRoute = authRoutes.includes(path);
+  if (isApiAuthRoute) return null;
 
   if (isAuthRoute) {
-    if (!isLoggedIn) return null; // Allow access to auth pages when not logged in
-
-    // Redirect logged-in users away from auth pages
-    const dest =
-      role === "Admin" ? "/admin/dashboard" :
-        role === "Operator" ? "/operator/dashboard" :
-          "/";
-
-    return Response.redirect(new URL(dest, nextUrl));
+    if (isLoggedIn) {
+      let redirectUrl = DEFAULT_LOGIN_REDIRECT;
+      if (userRole === "Admin") redirectUrl = "/admin/dashboard";
+      else if (userRole === "Operator") redirectUrl = "/operator/dashboard";
+      return Response.redirect(new URL(redirectUrl, nextUrl));
+    }
+    return null;
   }
 
-  // Special case: /operator/apply (requires login but NOT operator role)
-  if (path === "/operator/apply") {
+  if (isPublicRoute) return null;
+
+  if (nextUrl.pathname === "/operator/apply") {
     if (!isLoggedIn) {
       return Response.redirect(new URL("/login?callbackUrl=/operator/apply", nextUrl));
     }
-    return null; // Allow logged-in users (page will handle if they're already an operator)
+    return null;
   }
 
-  // All other routes require authentication
   if (!isLoggedIn) {
-    const callbackUrl = encodeURIComponent(path + nextUrl.search);
-    return Response.redirect(new URL(`/login?callbackUrl=${callbackUrl}`, nextUrl));
+    return Response.redirect(new URL("/login", nextUrl));
   }
 
-  // Role-based protection for /operator routes (except /operator/apply handled above)
-  if (path.startsWith("/operator") && role !== "Operator") {
+  if (nextUrl.pathname.startsWith("/operator") && userRole !== "Operator") {
     return Response.redirect(new URL("/", nextUrl));
   }
 
-  // Role-based protection for /admin routes
-  if (path.startsWith("/admin") && role !== "Admin") {
+  if (nextUrl.pathname.startsWith("/admin") && userRole !== "Admin") {
     return Response.redirect(new URL("/", nextUrl));
   }
 
-  // Allow authenticated users to proceed
   return null;
 });
 
-// Optimized matcher - exclude static files
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
 };
