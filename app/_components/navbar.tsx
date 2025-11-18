@@ -215,7 +215,7 @@ function AuthNav({ user }: { user: any }) {
                 Operators
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            {/*             <DropdownMenuItem asChild>
               <Link href="/admin/tours" className="cursor-pointer">
                 <MapPin className="mr-2 h-4 w-4" />
                 All Tours
@@ -232,7 +232,7 @@ function AuthNav({ user }: { user: any }) {
                 <BarChart3 className="mr-2 h-4 w-4" />
                 Analytics
               </Link>
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/profile" className="cursor-pointer">

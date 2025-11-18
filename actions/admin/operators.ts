@@ -132,8 +132,46 @@ export const getOperatorById = async (operatorId: string) => {
                     select: {
                         id: true,
                         title: true,
+                        category: true,
+                        priceFrom: true,
+                        currency: true,
                         isActive: true,
+                        images: true,
                         createdAt: true,
+                        _count: {
+                            select: {
+                                quoteRequests: true,
+                            },
+                        },
+                        // Include quote requests through tours
+                        quoteRequests: {
+                            select: {
+                                id: true,
+                                reference: true,
+                                status: true,
+                                quotedPrice: true,
+                                adults: true,
+                                children: true,
+                                preferredDate: true,
+                                createdAt: true,
+                                tour: {
+                                    select: {
+                                        id: true,
+                                        title: true,
+                                    },
+                                },
+                                user: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        email: true,
+                                    },
+                                },
+                            },
+                            orderBy: {
+                                createdAt: "desc",
+                            },
+                        },
                     },
                     orderBy: {
                         createdAt: "desc",
@@ -152,10 +190,18 @@ export const getOperatorById = async (operatorId: string) => {
             });
         }
 
+        // Flatten quote requests from all tours into a single array
+        const quoteRequests = operator.tours.flatMap(tour => tour.quoteRequests);
+
         return response({
             success: true,
             code: 200,
-            data: { operator },
+            data: {
+                operator: {
+                    ...operator,
+                    quoteRequests, // Add flattened quote requests
+                }
+            },
         });
     } catch (error: any) {
         console.error("Error fetching operator:", error);
@@ -260,6 +306,45 @@ export const approveOperator = async (operatorId: string) => {
         });
     }
 };
+
+export const getQuoteMessages = async (quoteRequestId: string) => {
+    try {
+        const user = await currentUser();
+
+        if (!user || user.role !== "Admin") {
+            return response({
+                success: false,
+                error: {
+                    code: 403,
+                    message: "Unauthorized. Admin access required.",
+                },
+            });
+        }
+
+        const messages = await db.quoteMessage.findMany({
+            where: { quoteRequestId },
+            orderBy: {
+                createdAt: "asc",
+            },
+        });
+
+        return response({
+            success: true,
+            code: 200,
+            data: { messages },
+        });
+    } catch (error: any) {
+        console.error("Error fetching quote messages:", error);
+        return response({
+            success: false,
+            error: {
+                code: 500,
+                message: "Failed to fetch messages.",
+            },
+        });
+    }
+};
+
 
 // Reject operator (initial rejection)
 export const rejectOperator = async (operatorId: string, reason: string) => {
