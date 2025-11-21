@@ -22,9 +22,12 @@ import {
     Package,
     Compass,
     Binoculars,
+    X,
+    Loader2,
 } from "lucide-react";
-import { useState, useEffect, ElementType, useRef } from "react";
+import { useState, useEffect, ElementType, useRef, useTransition } from "react";
 import { getLocalDestinations, getInternationalCountries, getCategories } from "@/actions/tours";
+import { type ScopeValue } from "@/lib/scope";
 
 interface TourFiltersProps {
     defaultValues?: {
@@ -35,11 +38,13 @@ interface TourFiltersProps {
         maxPrice?: string;
         search?: string;
     };
+    scope: ScopeValue;
 }
 
-export function TourFilters({ defaultValues }: TourFiltersProps) {
+export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const [isPending, startTransition] = useTransition();
     const [search, setSearch] = useState(defaultValues?.search || "");
     const [localDestination, setLocalDestination] = useState(defaultValues?.localDestination || "all");
     const [country, setCountry] = useState(defaultValues?.country || "all");
@@ -54,7 +59,24 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-    // Fetch destinations and categories on component mount
+    // Sync state when URL defaults change (e.g., scope toggle)
+    useEffect(() => {
+        setSearch(defaultValues?.search || "");
+        setLocalDestination(defaultValues?.localDestination || "all");
+        setCountry(defaultValues?.country || "all");
+        setCategory(defaultValues?.category || "all");
+        setMinPrice(defaultValues?.minPrice || "");
+        setMaxPrice(defaultValues?.maxPrice || "");
+    }, [
+        defaultValues?.search,
+        defaultValues?.localDestination,
+        defaultValues?.country,
+        defaultValues?.category,
+        defaultValues?.minPrice,
+        defaultValues?.maxPrice,
+    ]);
+
+    // Fetch destinations and categories when scope changes
     useEffect(() => {
         const fetchFilterData = async () => {
             try {
@@ -62,7 +84,7 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
                 const [localResponse, internationalResponse, categoriesResponse] = await Promise.all([
                     getLocalDestinations(),
                     getInternationalCountries(),
-                    getCategories()
+                    getCategories(scope)
                 ]);
 
                 if (localResponse.success && 'data' in localResponse) {
@@ -82,7 +104,19 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
         };
 
         fetchFilterData();
-    }, []);
+    }, [scope]);
+
+    // Reset category if it no longer exists for the current scope
+    useEffect(() => {
+        if (category !== "all" && categories.length > 0 && !categories.includes(category)) {
+            setCategory("all");
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("category");
+            params.delete("page");
+            const queryString = params.toString();
+            router.push(queryString ? `/?${queryString}` : "/");
+        }
+    }, [categories, category, router, searchParams]);
 
     useEffect(() => {
         if (isDialogOpen && searchInputRef.current) {
@@ -137,7 +171,10 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
 
         params.delete("page"); // Reset to page 1
 
-        router.push(`/?${params.toString()}`);
+        const queryString = params.toString();
+        startTransition(() => {
+            router.push(queryString ? `/?${queryString}` : "/");
+        });
     };
 
     const handleClear = () => {
@@ -147,7 +184,7 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
         setCategory("all");
         setMinPrice("");
         setMaxPrice("");
-        router.push("/");
+        startTransition(() => router.push("/"));
     };
 
     const handleSearchSubmit = (e?: React.FormEvent) => {
@@ -193,10 +230,19 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
         handleFilter({ category: nextValue });
     };
 
+    const hasActiveFilters =
+        (search?.trim?.() ?? "").length > 0 ||
+        localDestination !== "all" ||
+        country !== "all" ||
+        category !== "all" ||
+        minPrice !== "" ||
+        maxPrice !== "";
+
     const pillBase =
         "h-10 rounded-full border text-sm font-medium transition whitespace-nowrap px-3 inline-flex items-center gap-2";
     const pillActive = "border-slate-900 bg-slate-900 text-white";
     const pillInactive = "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100";
+    const pillDisabled = "opacity-70 cursor-not-allowed";
 
     const openDialog = () => {
         setIsDialogOpen(true);
@@ -208,7 +254,7 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
     };
 
     return (
-        <div className="py-4 space-y-3">
+        <div className="py-1 space-y-2" aria-busy={isPending}>
             <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
                     {/* Categories left, scrollable */}
@@ -220,7 +266,8 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
                                     key={`cat-${value}`}
                                     type="button"
                                     onClick={() => handleCategoryChip(value)}
-                                    className={`${pillBase} ${isActive ? pillActive : pillInactive} shrink-0 snap-start`}
+                                    disabled={isPending}
+                                    className={`${pillBase} ${isActive ? pillActive : pillInactive} ${isPending ? pillDisabled : ""} shrink-0 snap-start`}
                                 >
                                     <Icon className="h-4 w-4" />
                                     <span>{label}</span>
@@ -233,12 +280,30 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
                     <div className="flex shrink-0 items-center gap-2">
                         <button
                             type="button"
-                            className={`${pillBase} ${pillInactive}`}
+                            className={`${pillBase} ${pillInactive} ${isPending ? pillDisabled : ""}`}
                             onClick={openDialog}
+                            disabled={isPending}
                         >
                             <SlidersHorizontal className="h-4 w-4" />
                             <span>Filters</span>
                         </button>
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                className={`${pillBase} ${pillInactive} ${isPending ? pillDisabled : ""}`}
+                                onClick={handleClear}
+                                disabled={isPending}
+                            >
+                                <X className="h-4 w-4" />
+                                <span>Clear</span>
+                            </button>
+                        )}
+                        {isPending && (
+                            <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 bg-white">
+                                <Loader2 className="h-4 w-4 animate-spin text-slate-500" aria-hidden />
+                                <span>Updating</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

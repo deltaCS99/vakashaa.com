@@ -12,6 +12,7 @@ export type NavMenuItemConfig = {
   href: string;
   label: string;
   isActive?: boolean;
+  onClick?: () => void;
 };
 
 interface NavMenuProps extends ComponentProps<typeof NavigationMenu> {
@@ -30,7 +31,9 @@ export const NavMenu = ({ items = [], className, ...props }: NavMenuProps) => (
               item.isActive && "text-amber-600 border-amber-600"
             )}
           >
-            <Link href={item.href}>{item.label}</Link>
+            <Link href={item.href} onClick={item.onClick}>
+              {item.label}
+            </Link>
           </NavigationMenuLink>
         </NavigationMenuItem>
       ))}

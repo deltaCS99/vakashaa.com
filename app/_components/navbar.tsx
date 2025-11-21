@@ -32,6 +32,7 @@ import { Logo } from "@/components/logo"
 import { NavMenu, type NavMenuItemConfig } from "@/components/nav-menu"
 import { NavigationSheet } from "@/components/navigation-sheet"
 import { cn } from "@/lib/utils"
+import { resolveScope, type ScopeValue } from "@/lib/scope"
 
 interface NavbarProps {
   user: any
@@ -256,7 +257,12 @@ export default function Navbar({ user }: NavbarProps) {
   const [hasScrolled, setHasScrolled] = useState(false)
   const isOperator = user?.role === "Operator"
   const isAdmin = user?.role === "Admin"
-  const currentScope = searchParams.get("scope")
+  const currentScope = resolveScope({
+    scopeParam: searchParams.get("scope"),
+    country: searchParams.get("country"),
+    localDestination: searchParams.get("localDestination"),
+  })
+  const [optimisticScope, setOptimisticScope] = useState<ScopeValue | null>(null)
 
   useEffect(() => {
     const handleScroll = () => setHasScrolled(window.scrollY > 40)
@@ -265,16 +271,38 @@ export default function Navbar({ user }: NavbarProps) {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
+  useEffect(() => {
+    setOptimisticScope(null)
+  }, [searchParams])
+
+  const buildScopeHref = (targetScope: ScopeValue) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("page")
+    params.set("scope", targetScope)
+    params.delete("category")
+
+    if (targetScope === "local") {
+      params.delete("country")
+    } else {
+      params.delete("localDestination")
+    }
+
+    const queryString = params.toString()
+    return queryString ? `/?${queryString}` : "/"
+  }
+
   const navItems: NavMenuItemConfig[] = [
     {
       label: "South Africa",
-      href: "/?scope=local",
-      isActive: pathname === "/" && currentScope !== "international",
+      href: buildScopeHref("local"),
+      isActive: pathname === "/" && (optimisticScope ?? currentScope) === "local",
+      onClick: () => setOptimisticScope("local"),
     },
     {
       label: "Rest of Africa",
-      href: "/?scope=international",
-      isActive: pathname === "/" && currentScope === "international",
+      href: buildScopeHref("international"),
+      isActive: pathname === "/" && (optimisticScope ?? currentScope) === "international",
+      onClick: () => setOptimisticScope("international"),
     },
     ...PRIMARY_LINKS.map((link) => ({
       ...link,
@@ -285,48 +313,39 @@ export default function Navbar({ user }: NavbarProps) {
   return (
     <nav
       className={cn(
-        "fixed z-50 transition-all duration-300",
-        hasScrolled ? "inset-x-0 top-0" : "inset-x-0 top-0 md:inset-x-4 md:top-4"
+        "fixed inset-x-0 top-0 z-50 border-b border-slate-100/80 bg-white/95 backdrop-blur transition-all duration-300",
+        hasScrolled ? "shadow-sm" : "shadow-none"
       )}
     >
-      <div
-        className={cn(
-          "w-full shadow-lg shadow-black/5 backdrop-blur transition-all duration-300",
-          hasScrolled
-            ? "rounded-none bg-white/95 px-6"
-            : "max-w-6xl mx-auto rounded-full border border-white/60 bg-gradient-to-r from-slate-50/80 via-white/85 to-slate-50/80 px-6"
-        )}
-      >
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-8">
-          <div className="flex flex-1 items-center gap-3 min-w-0">
-            <Link href="/" className="flex items-center gap-2">
-              <Logo />
-            </Link>
-          </div>
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-8 px-4 sm:px-6">
+        <div className="flex flex-1 items-center gap-3 min-w-0">
+          <Link href="/" className="flex items-center gap-2">
+            <Logo />
+          </Link>
+        </div>
 
-          <div className="flex flex-1 justify-center">
-            <NavMenu items={navItems} className="hidden items-center gap-6 md:flex" />
-          </div>
+        <div className="flex flex-1 justify-center">
+          <NavMenu items={navItems} className="hidden items-center gap-6 md:flex" />
+        </div>
 
-          <div className="flex flex-1 items-center justify-end gap-3">
-            {user && !isOperator && !isAdmin && (
-              <Button
-                variant="outline"
-                asChild
-                className="hidden rounded-full border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white md:inline-flex"
-              >
-                <Link href="/operator/apply">
-                  <Users className="mr-2 h-4 w-4" />
-                  Become a Tour Operator
-                </Link>
-              </Button>
-            )}
+        <div className="flex flex-1 items-center justify-end gap-3">
+          {user && !isOperator && !isAdmin && (
+            <Button
+              variant="outline"
+              asChild
+              className="hidden rounded-full border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white md:inline-flex"
+            >
+              <Link href="/operator/apply">
+                <Users className="mr-2 h-4 w-4" />
+                Become a Tour Operator
+              </Link>
+            </Button>
+          )}
 
-            <AuthNav user={user} />
+          <AuthNav user={user} />
 
-            <div className="md:hidden">
-              <NavigationSheet items={navItems} />
-            </div>
+          <div className="md:hidden">
+            <NavigationSheet items={navItems} />
           </div>
         </div>
       </div>

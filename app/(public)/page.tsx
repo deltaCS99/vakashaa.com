@@ -8,6 +8,7 @@ import { TourGrid } from "@/components/tours/tour-grid";
 import { TourGridSkeleton } from "@/components/tours/tour-grid-skeleton";
 import { HeroSection } from "@/components/home/hero-section";
 import { BlogTeaser } from "@/components/blog/blog-teaser";
+import { resolveScope, type ScopeValue } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Browse Tours - Discover South Africa",
@@ -29,8 +30,17 @@ interface HomePageProps {
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  // Show hero only if no filters are active
-  const hasFilters = Object.keys(searchParams).length > 0;
+  const resolvedScope = resolveScope({
+    scopeParam: searchParams.scope,
+    country: searchParams.country,
+    localDestination: searchParams.localDestination,
+  });
+
+  // Show hero only if filters beyond scope/page are active
+  const hasFilters = Object.entries(searchParams).some(([key, value]) => {
+    if (key === "scope" || key === "page") return false;
+    return typeof value === "string" && value.length > 0;
+  });
 
   const blogResult = await getPublishedBlogPosts();
   const blogPosts =
@@ -49,13 +59,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section - Only show when no filters */}
+      {/* Hero Section - Only show when no filters beyond scope/page */}
       {!hasFilters && <HeroSection />}
 
       {/* Filters Section - sticky */}
       <section className="sticky top-16 z-40 border-b border-slate-100 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/75">
-        <div className="container mx-auto px-4 py-2 sm:py-3">
-          <TourFilters defaultValues={searchParams} />
+        <div className="container mx-auto px-4 py-1">
+          <TourFilters defaultValues={searchParams} scope={resolvedScope} />
         </div>
       </section>
 
@@ -68,7 +78,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         )}
 
         <Suspense fallback={<TourGridSkeleton />}>
-          <ToursContent searchParams={searchParams} />
+          <ToursContent searchParams={searchParams} resolvedScope={resolvedScope} />
         </Suspense>
       </section>
 
@@ -83,11 +93,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   );
 }
 
-async function ToursContent({ searchParams }: { searchParams: HomePageProps['searchParams'] }) {
+async function ToursContent({
+  searchParams,
+  resolvedScope,
+}: {
+  searchParams: HomePageProps['searchParams'];
+  resolvedScope: ScopeValue;
+}) {
   const result = await getTours({
     localDestination: searchParams.localDestination,
     country: searchParams.country,
-    scope: searchParams.scope,
+    scope: resolvedScope,
     category: searchParams.category,
     minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : undefined,
     maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : undefined,

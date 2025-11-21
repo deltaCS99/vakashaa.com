@@ -1,10 +1,10 @@
 // components/tours/tour-grid.tsx
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { TourCard } from "./tour-card";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,7 @@ export function TourGrid({ tours, totalPages, currentPage, totalCount }: TourGri
     const router = useRouter();
     const searchParams = useSearchParams();
     const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const [isNavigating, startTransition] = useTransition();
 
     const groupedTours = useMemo(() => {
         return tours.reduce<Record<string, Tour[]>>((acc, tour) => {
@@ -164,15 +165,30 @@ export function TourGrid({ tours, totalPages, currentPage, totalCount }: TourGri
         return Array.from(params.keys()).length > 0;
     })();
 
+    const clearFiltersAndSearch = () => {
+        const params = new URLSearchParams(searchParams.toString());
+        ["search", "localDestination", "country", "category", "minPrice", "maxPrice", "page"].forEach((key) =>
+            params.delete(key)
+        );
+        const queryString = params.toString();
+        startTransition(() => {
+            router.push(queryString ? `/?${queryString}` : "/");
+        });
+    };
+
     const resultsCount = totalCount ?? tours.length;
 
     if (tours.length === 0) {
         return (
-            <div className="text-center py-12">
+            <div className="text-center py-12 space-y-4">
                 <p className="text-lg text-muted-foreground">No tours found matching your criteria.</p>
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-muted-foreground">
                     Try adjusting your filters or search terms.
                 </p>
+                <Button variant="outline" onClick={clearFiltersAndSearch} disabled={isNavigating}>
+                    {isNavigating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                    {isNavigating ? "Clearing…" : "Clear filters and search"}
+                </Button>
             </div>
         );
     }

@@ -3,6 +3,7 @@
 
 import { db } from "@/lib/db";
 import { response } from "@/lib/utils";
+import { type ScopeValue } from "@/lib/scope";
 import { Prisma } from "@prisma/client";
 
 interface GetToursParams {
@@ -411,8 +412,15 @@ export const getCountries = async () => {
     }
 };
 
-export const getCategories = async () => {
+export const getCategories = async (scope?: ScopeValue) => {
     try {
+        const scopeFilter: Prisma.TourWhereInput | undefined =
+            scope === "local"
+                ? { countries: { equals: ["South Africa"] } }
+                : scope === "international"
+                    ? { NOT: { countries: { equals: ["South Africa"] } } }
+                    : undefined;
+
         const categories = await db.tour.findMany({
             where: {
                 isActive: true,
@@ -421,6 +429,7 @@ export const getCategories = async () => {
                     bankVerificationStatus: "Approved",
                 },
                 category: { not: null },
+                ...(scopeFilter ? { AND: [scopeFilter] } : {}),
             },
             select: {
                 category: true,
