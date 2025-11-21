@@ -43,8 +43,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   // Show hero only if no filters are active
   const hasFilters = Object.keys(searchParams).length > 0;
 
+  const heading =
+    searchParams.search
+      ? `Search results for "${searchParams.search}"`
+      : searchParams.localDestination
+        ? `Tours in ${searchParams.localDestination}`
+        : searchParams.country
+          ? `Tours in ${searchParams.country}`
+          : null;
+
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-white">
       {/* Hero Section - Only show when no filters */}
       {!hasFilters && (
         <HeroSection
@@ -53,26 +62,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         />
       )}
 
-      {/* Filters Section - Sticky on scroll */}
-      <section className="sticky top-16 z-40 bg-white border-b shadow-sm transition-all duration-300">
-        <div className="container mx-auto px-4">
+      {/* Filters Section - in-body */}
+      <section className="bg-white">
+        <div className="container mx-auto px-4 py-4">
           <TourFilters defaultValues={searchParams} />
         </div>
       </section>
 
       {/* Tours Grid */}
       <section className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {searchParams.search
-              ? `Search results for "${searchParams.search}"`
-              : searchParams.localDestination
-                ? `Tours in ${searchParams.localDestination}`
-                : searchParams.country
-                  ? `Tours in ${searchParams.country}`
-                  : "All Tours"}
-          </h1>
-        </div>
+        {heading && (
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">{heading}</h1>
+          </div>
+        )}
 
         <Suspense fallback={<TourGridSkeleton />}>
           <ToursContent searchParams={searchParams} />
@@ -120,5 +123,5 @@ async function ToursContent({ searchParams }: { searchParams: HomePageProps['sea
     );
   }
 
-  return <TourGrid tours={tours} totalPages={totalPages} currentPage={currentPage} />;
+  return <TourGrid tours={tours} totalPages={totalPages} currentPage={currentPage} totalCount={result.data.totalCount} />;
 }

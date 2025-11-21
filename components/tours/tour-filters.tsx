@@ -4,22 +4,26 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, SlidersHorizontal, MapPin, Plane } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-} from "@/components/ui/sheet";
+    Search,
+    SlidersHorizontal,
+    Building2,
+    Mountain,
+    Wine,
+    Package,
+    Compass,
+    Binoculars,
+} from "lucide-react";
+import { useState, useEffect, ElementType, useRef } from "react";
 import { getLocalDestinations, getInternationalCountries, getCategories } from "@/actions/tours";
 
 interface TourFiltersProps {
@@ -47,14 +51,13 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
     const [localDestinations, setLocalDestinations] = useState<string[]>([]);
     const [internationalCountries, setInternationalCountries] = useState<string[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
 
     // Fetch destinations and categories on component mount
     useEffect(() => {
         const fetchFilterData = async () => {
             try {
-                setIsLoading(true);
-
                 // Fetch local, international, and categories in parallel
                 const [localResponse, internationalResponse, categoriesResponse] = await Promise.all([
                     getLocalDestinations(),
@@ -75,43 +78,61 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
                 }
             } catch (error) {
                 console.error("Error fetching filter data:", error);
-            } finally {
-                setIsLoading(false);
             }
         };
 
         fetchFilterData();
     }, []);
 
-    const handleFilter = () => {
+    useEffect(() => {
+        if (isDialogOpen && searchInputRef.current) {
+            searchInputRef.current.focus();
+        }
+    }, [isDialogOpen]);
+
+    const handleFilter = (overrides?: {
+        search?: string;
+        localDestination?: string;
+        country?: string;
+        category?: string;
+        minPrice?: string;
+        maxPrice?: string;
+    }) => {
+        const nextSearch = overrides?.search ?? search;
+        const nextLocalDestination = overrides?.localDestination ?? localDestination;
+        const nextCountry = overrides?.country ?? country;
+        const nextCategory = overrides?.category ?? category;
+        const nextMinPrice = overrides?.minPrice ?? minPrice;
+        const nextMaxPrice = overrides?.maxPrice ?? maxPrice;
+
         const params = new URLSearchParams(searchParams.toString());
 
-        if (search) params.set("search", search);
+        if (nextSearch) params.set("search", nextSearch);
         else params.delete("search");
 
         // Handle local destination
-        if (localDestination && localDestination !== "all") {
-            params.set("localDestination", localDestination);
+        if (nextLocalDestination && nextLocalDestination !== "all") {
+            params.set("localDestination", nextLocalDestination);
             params.delete("country"); // Clear country if local is selected
         } else {
             params.delete("localDestination");
         }
 
         // Handle international country
-        if (country && country !== "all") {
-            params.set("country", country);
+        if (nextCountry && nextCountry !== "all") {
+            params.set("country", nextCountry);
             params.delete("localDestination"); // Clear local if country is selected
         } else {
             params.delete("country");
         }
 
-        if (category && category !== "all") params.set("category", category);
+        if (nextCategory && nextCategory !== "all") params.set("category", nextCategory);
         else params.delete("category");
 
-        if (minPrice) params.set("minPrice", minPrice);
+        if (nextMinPrice) params.set("minPrice", nextMinPrice);
         else params.delete("minPrice");
 
-        if (maxPrice) params.set("maxPrice", maxPrice);
+        if (nextMaxPrice) params.set("maxPrice", nextMaxPrice);
         else params.delete("maxPrice");
 
         params.delete("page"); // Reset to page 1
@@ -129,233 +150,228 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
         router.push("/");
     };
 
-    const handleSearchSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSearchSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         handleFilter();
+        setIsDialogOpen(false);
     };
 
-    // When local destination is selected, clear country
     const handleLocalDestinationChange = (value: string) => {
-        setLocalDestination(value);
-        if (value !== "all") {
+        const nextValue = localDestination === value ? "all" : value;
+        setLocalDestination(nextValue);
+        if (nextValue !== "all") {
             setCountry("all");
         }
+        handleFilter({ localDestination: nextValue, country: "all" });
     };
 
-    // When country is selected, clear local destination
     const handleCountryChange = (value: string) => {
-        setCountry(value);
-        if (value !== "all") {
+        const nextValue = country === value ? "all" : value;
+        setCountry(nextValue);
+        if (nextValue !== "all") {
             setLocalDestination("all");
         }
+        handleFilter({ country: nextValue, localDestination: "all" });
+    };
+
+    const categoryIconMap: Record<string, ElementType> = {
+        "safari": Binoculars,
+        "city tour": Building2,
+        "scenic tour": Mountain,
+        "wine tour": Wine,
+        "package tour": Package,
+    };
+
+    const quickCategoryChips = categories.map((cat) => {
+        const Icon = categoryIconMap[cat.toLowerCase()] || Compass;
+        return { label: cat, value: cat, icon: Icon };
+    });
+
+    const handleCategoryChip = (value: string) => {
+        const nextValue = category === value ? "all" : value;
+        setCategory(nextValue);
+        handleFilter({ category: nextValue });
+    };
+
+    const pillBase =
+        "h-10 rounded-full border text-sm font-medium transition whitespace-nowrap px-3 inline-flex items-center gap-2";
+    const pillActive = "border-slate-900 bg-slate-900 text-white";
+    const pillInactive = "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100";
+
+    const openDialog = () => {
+        setIsDialogOpen(true);
+    };
+
+    const clearAndClose = () => {
+        handleClear();
+        setIsDialogOpen(false);
     };
 
     return (
-        <div className="py-4 space-y-4">
-            {/* Search Bar */}
-            <form onSubmit={handleSearchSubmit} className="flex gap-2">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <Input
-                        type="text"
-                        placeholder="Search tours..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-10"
-                    />
+        <div className="py-4 space-y-3">
+            <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                    {/* Categories left, scrollable */}
+                    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
+                        {quickCategoryChips.map(({ label, value, icon: Icon }) => {
+                            const isActive = category === value;
+                            return (
+                                <button
+                                    key={`cat-${value}`}
+                                    type="button"
+                                    onClick={() => handleCategoryChip(value)}
+                                    className={`${pillBase} ${isActive ? pillActive : pillInactive}`}
+                                >
+                                    <Icon className="h-4 w-4" />
+                                    <span>{label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Filters right */}
+                    <div className="flex shrink-0 items-center gap-2">
+                        <button
+                            type="button"
+                            className={`${pillBase} ${pillInactive}`}
+                            onClick={openDialog}
+                        >
+                            <SlidersHorizontal className="h-4 w-4" />
+                            <span>Filters</span>
+                        </button>
+                    </div>
                 </div>
-                <Button type="submit">Search</Button>
-            </form>
-
-            {/* Desktop Filters */}
-            <div className="hidden md:flex items-center gap-4 flex-wrap">
-                {/* Local Destinations (South Africa) */}
-                <Select
-                    value={localDestination}
-                    onValueChange={handleLocalDestinationChange}
-                    disabled={isLoading || country !== "all"}
-                >
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="🇿🇦 Local" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Local</SelectItem>
-                        {localDestinations.map((dest) => (
-                            <SelectItem key={dest} value={dest}>
-                                {dest}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-
-                {/* International Countries */}
-                <Select
-                    value={country}
-                    onValueChange={handleCountryChange}
-                    disabled={isLoading || localDestination !== "all"}
-                >
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="✈️ International" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Countries</SelectItem>
-                        {internationalCountries.map((countryName) => (
-                            <SelectItem key={countryName} value={countryName}>
-                                {countryName}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-
-                {/* Category */}
-                <Select value={category} onValueChange={setCategory} disabled={isLoading}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        {categories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                                {cat}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-
-                {/* Price Range */}
-                <div className="flex gap-2 items-center">
-                    <Input
-                        type="number"
-                        placeholder="Min price"
-                        value={minPrice}
-                        onChange={(e) => setMinPrice(e.target.value)}
-                        className="w-[120px]"
-                    />
-                    <span className="text-gray-400">-</span>
-                    <Input
-                        type="number"
-                        placeholder="Max price"
-                        value={maxPrice}
-                        onChange={(e) => setMaxPrice(e.target.value)}
-                        className="w-[120px]"
-                    />
-                </div>
-
-                <Button onClick={handleFilter} variant="default">
-                    Apply Filters
-                </Button>
-
-                {(search || localDestination !== "all" || country !== "all" || category !== "all" || minPrice || maxPrice) && (
-                    <Button onClick={handleClear} variant="outline">
-                        Clear
-                    </Button>
-                )}
             </div>
 
-            {/* Mobile Filters */}
-            <div className="md:hidden">
-                <Sheet>
-                    <SheetTrigger asChild>
-                        <Button variant="outline" className="w-full">
-                            <SlidersHorizontal className="w-4 h-4 mr-2" />
-                            Filters
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="bottom" className="h-[80vh] overflow-y-auto">
-                        <SheetHeader>
-                            <SheetTitle>Filter Tours</SheetTitle>
-                        </SheetHeader>
-                        <div className="py-4 space-y-4">
-                            <div>
-                                <label className="text-sm font-medium mb-2 block">🇿🇦 Local (South Africa)</label>
-                                <Select
-                                    value={localDestination}
-                                    onValueChange={handleLocalDestinationChange}
-                                    disabled={isLoading || country !== "all"}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="All Local" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Local</SelectItem>
-                                        {localDestinations.map((dest) => (
-                                            <SelectItem key={dest} value={dest}>
-                                                {dest}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="max-w-4xl shadow-none border border-slate-200">
+                    <DialogHeader className="pb-2">
+                        <DialogTitle>Filters</DialogTitle>
+                    </DialogHeader>
 
-                            <div>
-                                <label className="text-sm font-medium mb-2 block">✈️ International</label>
-                                <Select
-                                    value={country}
-                                    onValueChange={handleCountryChange}
-                                    disabled={isLoading || localDestination !== "all"}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="All Countries" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Countries</SelectItem>
-                                        {internationalCountries.map((countryName) => (
-                                            <SelectItem key={countryName} value={countryName}>
-                                                {countryName}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                    <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+                        <form onSubmit={handleSearchSubmit} className="space-y-3">
+                            <Label className="text-sm font-semibold text-slate-800">Search</Label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    placeholder="Search tours..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-9"
+                                />
                             </div>
+                        </form>
 
-                            <div>
-                                <label className="text-sm font-medium mb-2 block">Category</label>
-                                <Select value={category} onValueChange={setCategory} disabled={isLoading}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="All Categories" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Categories</SelectItem>
-                                        {categories.map((cat) => (
-                                            <SelectItem key={cat} value={cat}>
-                                                {cat}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <Separator />
 
-                            <div>
-                                <label className="text-sm font-medium mb-2 block">Price Range (R)</label>
-                                <div className="flex gap-2 items-center">
-                                    <Input
-                                        type="number"
-                                        placeholder="Min"
-                                        value={minPrice}
-                                        onChange={(e) => setMinPrice(e.target.value)}
-                                    />
-                                    <span className="text-gray-400">-</span>
-                                    <Input
-                                        type="number"
-                                        placeholder="Max"
-                                        value={maxPrice}
-                                        onChange={(e) => setMaxPrice(e.target.value)}
-                                    />
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-slate-800">Local (South Africa)</Label>
+                                <div className="space-y-2">
+                                    {localDestinations.map((dest) => (
+                                        <label key={dest} className="flex items-center gap-3 text-sm text-slate-700">
+                                            <Checkbox
+                                                checked={localDestination === dest}
+                                                onCheckedChange={() => handleLocalDestinationChange(dest)}
+                                            />
+                                            <span>{dest}</span>
+                                        </label>
+                                    ))}
+                                    <label className="flex items-center gap-3 text-sm text-slate-600">
+                                        <Checkbox
+                                            checked={localDestination === "all"}
+                                            onCheckedChange={() => handleLocalDestinationChange("all")}
+                                        />
+                                        <span>All Local</span>
+                                    </label>
                                 </div>
                             </div>
 
-                            <div className="flex gap-2">
-                                <Button onClick={handleFilter} className="flex-1">
-                                    Apply Filters
-                                </Button>
-                                <Button onClick={handleClear} variant="outline" className="flex-1">
-                                    Clear
-                                </Button>
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-slate-800">International</Label>
+                                <div className="space-y-2">
+                                    {internationalCountries.map((ctry) => (
+                                        <label key={ctry} className="flex items-center gap-3 text-sm text-slate-700">
+                                            <Checkbox
+                                                checked={country === ctry}
+                                                onCheckedChange={() => handleCountryChange(ctry)}
+                                            />
+                                            <span>{ctry}</span>
+                                        </label>
+                                    ))}
+                                    <label className="flex items-center gap-3 text-sm text-slate-600">
+                                        <Checkbox
+                                            checked={country === "all"}
+                                            onCheckedChange={() => handleCountryChange("all")}
+                                        />
+                                        <span>All Countries</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
-                    </SheetContent>
-                </Sheet>
-            </div>
+
+                        <Separator />
+
+                        <div className="space-y-3">
+                            <Label className="text-sm font-semibold text-slate-800">Categories</Label>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                {categories.map((cat) => (
+                                    <label key={cat} className="flex items-center gap-3 text-sm text-slate-700">
+                                        <Checkbox
+                                            checked={category === cat}
+                                            onCheckedChange={() => handleCategoryChip(cat)}
+                                        />
+                                        <span>{cat}</span>
+                                    </label>
+                                ))}
+                                <label className="flex items-center gap-3 text-sm text-slate-600">
+                                    <Checkbox
+                                        checked={category === "all"}
+                                        onCheckedChange={() => handleCategoryChip("all")}
+                                    />
+                                    <span>All Categories</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-3">
+                            <Label className="text-sm font-semibold text-slate-800">Price (R)</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    placeholder="Min"
+                                    value={minPrice}
+                                    onChange={(e) => setMinPrice(e.target.value)}
+                                />
+                                <span className="text-slate-400">-</span>
+                                <Input
+                                    type="number"
+                                    placeholder="Max"
+                                    value={maxPrice}
+                                    onChange={(e) => setMaxPrice(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                        <Button variant="ghost" onClick={clearAndClose}>
+                            Clear
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSearchSubmit}>Show results</Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

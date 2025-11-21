@@ -31,6 +31,7 @@ interface TourGridProps {
     tours: Tour[];
     totalPages: number;
     currentPage: number;
+    totalCount: number;
 }
 
 const MULTI_PROVINCE_LABEL = "Across South Africa";
@@ -60,32 +61,43 @@ const getGroupLabel = (tour: Tour) => {
     return MULTI_COUNTRY_LABEL;
 };
 
-const getGroupSubtitle = (label: string, count: number) => {
-    const toursWord = pluralizeTourCount(count);
+const provinceBlurbs: Record<string, string> = {
+    "Western Cape": "Coastlines, Table Mountain, and wine valleys — perfect for scenery, food, and epic drives.",
+    "Eastern Cape": "Wild beaches, Addo safaris, and surf towns — easygoing wildlife meets coast.",
+    "Gauteng": "Jozi energy, Soweto heritage, and nightlife — culture-rich city breaks.",
+    "KwaZulu-Natal": "Warm beaches, Drakensberg peaks, Durban eats — year-round sun and hikes.",
+    "Mpumalanga": "Kruger gates, Blyde Canyon, Panorama views — Big 5 with big scenery.",
+    "Limpopo": "Bushveld reserves and waterfalls — calm safaris and countryside escapes.",
+    "North West": "Pilanesberg Big 5 and Sun City — quick safaris plus resort fun.",
+    "Free State": "Wide plains and sandstone cliffs — quiet drives and small-town pauses.",
+    "Northern Cape": "Kalahari skies, wildflowers, and desert nights — stargazing and solitude.",
+};
 
+const getGroupSubtitle = (label: string, count: number) => {
     if (isProvinceName(label)) {
-        return `${count} ${toursWord} in ${label}`;
+        return provinceBlurbs[label] || `Discover the best of ${label}.`;
     }
 
     if (label === MULTI_PROVINCE_LABEL) {
-        return `${count} ${toursWord} that span multiple provinces`;
+        return "Big-sky routes that blend provinces into one journey.";
     }
 
     if (label === MULTI_COUNTRY_LABEL) {
-        return `${count} ${toursWord} crossing borders`;
+        return "Cross-border adventures for multi-country explorers.";
     }
 
     if (label.startsWith("Explore ")) {
         const country = label.replace("Explore ", "");
-        return `${count} ${toursWord} in ${country}`;
+        return `Top picks across ${country}.`;
     }
 
+    const toursWord = pluralizeTourCount(count);
     return `${count} ${toursWord}`;
 };
 
 const getHeading = (label: string) => {
     if (isProvinceName(label)) {
-        return `Stay in ${label}`;
+        return `Tours in ${label}`;
     }
 
     return label;
@@ -111,7 +123,7 @@ const sortGroupedEntries = (groups: Record<string, Tour[]>) => {
     return entries;
 };
 
-export function TourGrid({ tours, totalPages, currentPage }: TourGridProps) {
+export function TourGrid({ tours, totalPages, currentPage, totalCount }: TourGridProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -146,6 +158,14 @@ export function TourGrid({ tours, totalPages, currentPage }: TourGridProps) {
         });
     };
 
+    const hasActiveFilters = (() => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("page");
+        return Array.from(params.keys()).length > 0;
+    })();
+
+    const resultsCount = totalCount ?? tours.length;
+
     if (tours.length === 0) {
         return (
             <div className="text-center py-12">
@@ -159,6 +179,19 @@ export function TourGrid({ tours, totalPages, currentPage }: TourGridProps) {
 
     return (
         <div className="space-y-10">
+            {hasActiveFilters && (
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
+                    <span className="font-medium">
+                        {resultsCount} {pluralizeTourCount(resultsCount)} found
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="hidden sm:inline text-slate-600">Sort by:</span>
+                        <button className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
+                            Recommended
+                        </button>
+                    </div>
+                </div>
+            )}
             {sortedGroups.map(([label, provinceTours]) => (
                 <section key={label} className="space-y-3">
                     <div className="flex flex-wrap items-end justify-between gap-2">
