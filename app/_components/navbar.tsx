@@ -38,7 +38,7 @@ interface NavbarProps {
   user: any
 }
 
-const PRIMARY_LINKS = [{ label: "Planning Tools", href: "/blog" }]
+const PRIMARY_LINKS = [{ label: "Insights", href: "/blog" }]
 
 const isActiveLink = (pathname: string, target: string) => {
   if (target === "/") {

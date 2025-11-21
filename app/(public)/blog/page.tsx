@@ -39,6 +39,8 @@ export default async function BlogPage({
   }
 
   const { posts } = result.data;
+  const featuredPost = posts[0] ?? null;
+  const listPosts = posts.length > 1 ? posts.slice(1) : posts;
 
   // Get categories for filter
   const categories = await db.blogPost.findMany({
@@ -63,11 +65,11 @@ export default async function BlogPage({
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <BlogHero />
+      <BlogHero featuredPost={featuredPost} />
       
       <div className="container mx-auto px-4 py-12">
         <BlogList
-          posts={posts}
+          posts={listPosts}
           categories={uniqueCategories}
           tags={uniqueTags}
           currentCategory={category}
