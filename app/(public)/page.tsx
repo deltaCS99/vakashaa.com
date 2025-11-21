@@ -50,13 +50,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section - Only show when no filters */}
-      {!hasFilters && (
-        <HeroSection />
-      )}
+      {!hasFilters && <HeroSection />}
 
-      {/* Filters Section - in-body */}
-      <section className="bg-white">
-        <div className="container mx-auto px-4 py-4">
+      {/* Filters Section - sticky */}
+      <section className="sticky top-16 z-40 border-b border-slate-100 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+        <div className="container mx-auto px-4 py-2 sm:py-3">
           <TourFilters defaultValues={searchParams} />
         </div>
       </section>

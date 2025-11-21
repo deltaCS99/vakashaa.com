@@ -48,7 +48,7 @@ export function HeroSection() {
     const ActiveIcon = activeScope.Icon
 
     return (
-        <section className="relative isolate text-white min-h-[720px] py-20 md:py-32 flex items-center overflow-hidden">
+        <section className="relative isolate text-white min-h-[600px] md:min-h-[760px] py-16 md:py-32 flex items-center overflow-hidden">
             {/* Background image with dark top overlay */}
             <div
                 className="absolute inset-0 -z-20 bg-cover bg-center bg-no-repeat"
@@ -76,7 +76,7 @@ export function HeroSection() {
                                 <DropdownMenuTrigger asChild>
                                     <button
                                         type="button"
-                                        className="flex items-center gap-2 rounded-xl md:rounded-full bg-white px-4 py-3 text-left text-sm md:text-base font-semibold text-gray-800 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
+                                        className="flex w-full md:w-auto items-center gap-2 rounded-xl md:rounded-full bg-white px-4 py-3 text-left text-sm md:text-base font-semibold text-gray-800 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
                                     >
                                         <ActiveIcon className="h-4 w-4 text-amber-600" />
                                         <span>{scope === "international" ? "Africa" : "South Africa"}</span>
@@ -108,7 +108,7 @@ export function HeroSection() {
 
                             <Button
                                 type="submit"
-                                className="h-12 md:h-14 px-6 md:px-8 rounded-xl md:rounded-full bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-sm"
+                                className="h-12 md:h-14 w-full md:w-auto px-6 md:px-8 rounded-xl md:rounded-full bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-sm"
                             >
                                 Search
                             </Button>

@@ -212,7 +212,7 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
             <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
                     {/* Categories left, scrollable */}
-                    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {quickCategoryChips.map(({ label, value, icon: Icon }) => {
                             const isActive = category === value;
                             return (
@@ -220,7 +220,7 @@ export function TourFilters({ defaultValues }: TourFiltersProps) {
                                     key={`cat-${value}`}
                                     type="button"
                                     onClick={() => handleCategoryChip(value)}
-                                    className={`${pillBase} ${isActive ? pillActive : pillInactive}`}
+                                    className={`${pillBase} ${isActive ? pillActive : pillInactive} shrink-0 snap-start`}
                                 >
                                     <Icon className="h-4 w-4" />
                                     <span>{label}</span>

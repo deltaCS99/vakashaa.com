@@ -283,7 +283,12 @@ export default function Navbar({ user }: NavbarProps) {
   ]
 
   return (
-    <nav className={cn("fixed z-50 transition-all duration-300", hasScrolled ? "inset-x-0 top-0" : "inset-x-4 top-4")}>
+    <nav
+      className={cn(
+        "fixed z-50 transition-all duration-300",
+        hasScrolled ? "inset-x-0 top-0" : "inset-x-0 top-0 md:inset-x-4 md:top-4"
+      )}
+    >
       <div
         className={cn(
           "w-full shadow-lg shadow-black/5 backdrop-blur transition-all duration-300",

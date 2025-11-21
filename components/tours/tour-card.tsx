@@ -163,17 +163,17 @@ export function TourCard({ tour }: TourCardProps) {
           </div>
 
           {statItems.length > 0 && (
-            <div className="flex w-full items-start justify-between gap-[26px]">
+            <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
               {statItems.map(({ icon: Icon, emoji, text }, index) => (
                 <div
                   key={`${text}-${index}`}
-                  className="flex w-[72px] flex-col items-center gap-[9px] text-center sm:w-[78px]"
+                  className="flex flex-col items-start gap-2 text-left sm:items-center sm:text-center"
                 >
-                  <div className="flex h-[32px] w-[32px] items-center justify-center text-gray-600 text-lg">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-50 text-gray-600 text-lg">
                     {Icon ? <Icon className="h-4 w-4" /> : emoji}
                   </div>
                   <p
-                    className="max-w-[84px] truncate text-xs font-medium text-gray-700"
+                    className="text-xs font-medium text-gray-700 line-clamp-2"
                     title={text}
                   >
                     {text}
