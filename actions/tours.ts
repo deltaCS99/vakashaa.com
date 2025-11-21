@@ -105,6 +105,8 @@ export const getTours = async (params: GetToursParams = {}) => {
                 countries: true,
                 region: true,
                 category: true,
+                destinations: true,
+                inclusions: true,
                 images: true,
                 maxCapacity: true,
                 createdAt: true,

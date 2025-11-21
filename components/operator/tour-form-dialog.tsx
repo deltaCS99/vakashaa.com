@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus, Trash2, Info } from "lucide-react";
 import { createTour, updateTour } from "@/actions/operator/tours";
+import { SOUTH_AFRICAN_PROVINCES } from "@/lib/regions";
 import { TourImageUpload } from "./tour-image-upload";
 import { toast } from "sonner";
 
@@ -51,18 +52,6 @@ const TOUR_CATEGORIES = [
     "Family",
     "Romantic",
     "Group Tours",
-];
-
-const SOUTH_AFRICAN_REGIONS = [
-    "Western Cape",
-    "Eastern Cape",
-    "Northern Cape",
-    "Free State",
-    "KwaZulu-Natal",
-    "Gauteng",
-    "Limpopo",
-    "Mpumalanga",
-    "North West",
 ];
 
 const POPULAR_COUNTRIES = [
@@ -455,7 +444,7 @@ export function TourFormDialog({ mode, tour, operatorProfileId, children }: Tour
                                     <SelectValue placeholder="Select SA region (optional)" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {SOUTH_AFRICAN_REGIONS.map((reg) => (
+                                    {SOUTH_AFRICAN_PROVINCES.map((reg) => (
                                         <SelectItem key={reg} value={reg}>
                                             {reg}
                                         </SelectItem>
