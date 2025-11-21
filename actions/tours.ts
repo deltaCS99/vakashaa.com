@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 interface GetToursParams {
     localDestination?: string; // Filter by SA regions/cities
     country?: string; // Filter by international country
+    scope?: "local" | "international"; // High-level scope filter
     category?: string;
     minPrice?: number; // In cents
     maxPrice?: number; // In cents
@@ -21,6 +22,7 @@ export const getTours = async (params: GetToursParams = {}) => {
         const {
             localDestination,
             country,
+            scope,
             category,
             minPrice,
             maxPrice,
@@ -53,6 +55,23 @@ export const getTours = async (params: GetToursParams = {}) => {
         // Filter by international country
         if (country) {
             where.countries = { has: country };
+        }
+
+        // High-level scope filter
+        if (scope === "local") {
+            where.AND = where.AND || [];
+            (where.AND as Prisma.TourWhereInput[]).push({
+                countries: { equals: ["South Africa"] },
+            });
+        }
+
+        if (scope === "international") {
+            where.AND = where.AND || [];
+            (where.AND as Prisma.TourWhereInput[]).push({
+                NOT: {
+                    countries: { equals: ["South Africa"] },
+                },
+            });
         }
 
         // Filter by category

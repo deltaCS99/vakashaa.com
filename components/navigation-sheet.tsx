@@ -9,12 +9,14 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Menu } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { NavMenu, type NavMenuItemConfig } from "@/components/nav-menu";
+import { ReactNode } from "react";
 
 interface NavigationSheetProps {
-  items: NavMenuItemConfig[];
+  items?: NavMenuItemConfig[];
+  extraContent?: ReactNode;
 }
 
-export const NavigationSheet = ({ items }: NavigationSheetProps) => {
+export const NavigationSheet = ({ items = [], extraContent }: NavigationSheetProps) => {
   return (
     <Sheet>
       <VisuallyHidden>
@@ -29,6 +31,7 @@ export const NavigationSheet = ({ items }: NavigationSheetProps) => {
       <SheetContent className="px-6 py-3">
         <Logo />
         <NavMenu items={items} orientation="vertical" className="mt-6 [&>div]:h-full" />
+        {extraContent ? <div className="mt-6">{extraContent}</div> : null}
       </SheetContent>
     </Sheet>
   );

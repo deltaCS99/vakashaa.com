@@ -1,7 +1,7 @@
 // app/(public)/page.tsx
 import { Suspense } from "react";
 import { Metadata } from "next";
-import { getTours, getLocalDestinations, getInternationalCountries } from "@/actions/tours";
+import { getTours } from "@/actions/tours";
 import { TourFilters } from "@/components/tours/tour-filters";
 import { TourGrid } from "@/components/tours/tour-grid";
 import { TourGridSkeleton } from "@/components/tours/tour-grid-skeleton";
@@ -17,6 +17,7 @@ interface HomePageProps {
   searchParams: {
     localDestination?: string;
     country?: string;
+    scope?: "local" | "international";
     category?: string;
     minPrice?: string;
     maxPrice?: string;
@@ -26,20 +27,6 @@ interface HomePageProps {
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  // Fetch destinations for hero
-  const localDestsResult = await getLocalDestinations();
-  const internationalCountriesResult = await getInternationalCountries();
-
-  const localDestinations =
-    localDestsResult.success && "data" in localDestsResult
-      ? localDestsResult.data.destinations
-      : [];
-
-  const internationalCountries =
-    internationalCountriesResult.success && "data" in internationalCountriesResult
-      ? internationalCountriesResult.data.countries
-      : [];
-
   // Show hero only if no filters are active
   const hasFilters = Object.keys(searchParams).length > 0;
 
@@ -56,10 +43,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <div className="min-h-screen bg-white">
       {/* Hero Section - Only show when no filters */}
       {!hasFilters && (
-        <HeroSection
-          localDestinations={localDestinations}
-          internationalCountries={internationalCountries}
-        />
+        <HeroSection />
       )}
 
       {/* Filters Section - in-body */}
@@ -89,6 +73,7 @@ async function ToursContent({ searchParams }: { searchParams: HomePageProps['sea
   const result = await getTours({
     localDestination: searchParams.localDestination,
     country: searchParams.country,
+    scope: searchParams.scope,
     category: searchParams.category,
     minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : undefined,
     maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : undefined,

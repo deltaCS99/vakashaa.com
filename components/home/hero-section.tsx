@@ -3,40 +3,16 @@
 
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 
-interface HeroSectionProps {
-    localDestinations: string[]
-    internationalCountries: string[]
-}
-
-export function HeroSection({ localDestinations, internationalCountries }: HeroSectionProps) {
+export function HeroSection() {
     const { currentLang, currentIndex, isAnimating } = useLanguage()
     const router = useRouter()
     const searchParams = useSearchParams()
     const [searchQuery, setSearchQuery] = useState(searchParams.get("search") ?? "")
-
-    const handleDestinationSelect = (value: string, type: "local" | "international") => {
-        const params = new URLSearchParams()
-
-        // Clear previous filters
-        params.delete("localDestination")
-        params.delete("country")
-
-        // Set new filter
-        if (type === "local") {
-            params.set("localDestination", value)
-        } else {
-            params.set("country", value)
-        }
-
-        router.push(`/?${params.toString()}`)
-    }
 
     const handleHeroSearch = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault()
@@ -78,68 +54,6 @@ export function HeroSection({ localDestinations, internationalCountries }: HeroS
                         </div>
 
                         {currentIndex > 0 && <p className="text-sm text-white/90 font-medium drop-shadow">{currentLang.name}</p>}
-                    </div>
-
-                    {/* Destination Selector */}
-                    <div className="max-w-2xl mx-auto">
-                        <Tabs defaultValue="local" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 bg-white/20 backdrop-blur-md border border-white/20">
-                                <TabsTrigger
-                                    value="local"
-                                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-600 data-[state=active]:text-white font-medium transition-all"
-                                >
-                                    South Africa
-                                </TabsTrigger>
-                                <TabsTrigger
-                                    value="international"
-                                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-600 data-[state=active]:text-white font-medium transition-all"
-                                >
-                                    Rest of Africa
-                                </TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="local" className="mt-4">
-                                <Select onValueChange={(value) => handleDestinationSelect(value, "local")}>
-                                    <SelectTrigger className="w-full h-16 text-lg bg-white text-gray-900 border-2 border-amber-500/20 shadow-2xl hover:shadow-3xl hover:border-amber-500/40 transition-all">
-                                        <SelectValue placeholder="Select your South African destination..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {localDestinations.length > 0 ? (
-                                            localDestinations.map((dest) => (
-                                                <SelectItem key={dest} value={dest} className="text-lg">
-                                                    {dest}
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="none" disabled>
-                                                No destinations available
-                                            </SelectItem>
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </TabsContent>
-
-                            <TabsContent value="international" className="mt-4">
-                                <Select onValueChange={(value) => handleDestinationSelect(value, "international")}>
-                                    <SelectTrigger className="w-full h-16 text-lg bg-white text-gray-900 border-2 border-amber-500/20 shadow-2xl hover:shadow-3xl hover:border-amber-500/40 transition-all">
-                                        <SelectValue placeholder="Explore the rest of Africa..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {internationalCountries.length > 0 ? (
-                                            internationalCountries.map((country) => (
-                                                <SelectItem key={country} value={country} className="text-lg">
-                                                    {country}
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="none" disabled>
-                                                No countries available
-                                            </SelectItem>
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </TabsContent>
-                        </Tabs>
                     </div>
 
                     {/* Subtitle + Hero search */}

@@ -1,6 +1,7 @@
 // app/_components/navbar.tsx
 "use client"
 
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -25,21 +26,18 @@ import {
   FileText,
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { handleSignOut } from "@/actions/login"
 import { Logo } from "@/components/logo"
 import { NavMenu, type NavMenuItemConfig } from "@/components/nav-menu"
 import { NavigationSheet } from "@/components/navigation-sheet"
+import { cn } from "@/lib/utils"
 
 interface NavbarProps {
   user: any
 }
 
-const PRIMARY_LINKS = [
-  { label: "Tours", href: "/" },
-  { label: "Blog", href: "/blog" },
-  { label: "About", href: "/about" },
-]
+const PRIMARY_LINKS = [{ label: "Planning Tools", href: "/blog" }]
 
 const isActiveLink = (pathname: string, target: string) => {
   if (target === "/") {
@@ -254,42 +252,76 @@ function AuthNav({ user }: { user: any }) {
 
 export default function Navbar({ user }: NavbarProps) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [hasScrolled, setHasScrolled] = useState(false)
   const isOperator = user?.role === "Operator"
   const isAdmin = user?.role === "Admin"
+  const currentScope = searchParams.get("scope")
 
-  const navItems: NavMenuItemConfig[] = PRIMARY_LINKS.map((link) => ({
-    ...link,
-    isActive: isActiveLink(pathname, link.href),
-  }))
+  useEffect(() => {
+    const handleScroll = () => setHasScrolled(window.scrollY > 40)
+    handleScroll()
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  const navItems: NavMenuItemConfig[] = [
+    {
+      label: "South Africa",
+      href: "/?scope=local",
+      isActive: pathname === "/" && currentScope !== "international",
+    },
+    {
+      label: "Rest of Africa",
+      href: "/?scope=international",
+      isActive: pathname === "/" && currentScope === "international",
+    },
+    ...PRIMARY_LINKS.map((link) => ({
+      ...link,
+      isActive: isActiveLink(pathname, link.href),
+    })),
+  ]
 
   return (
-    <nav className="fixed inset-x-4 top-4 z-50">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between rounded-full border border-border bg-background/95 px-4 shadow-lg shadow-black/5 backdrop-blur">
-        <div className="flex flex-1 items-center gap-4">
-          <Link href="/" className="flex items-center gap-3 rounded-full border border-input bg-white px-4 py-2">
-            <Logo />
-          </Link>
-          <NavMenu items={navItems} className="hidden md:flex" />
-        </div>
+    <nav className={cn("fixed z-50 transition-all duration-300", hasScrolled ? "inset-x-0 top-0" : "inset-x-4 top-4")}>
+      <div
+        className={cn(
+          "w-full shadow-lg shadow-black/5 backdrop-blur transition-all duration-300",
+          hasScrolled
+            ? "rounded-none bg-white/95 px-6"
+            : "max-w-6xl mx-auto rounded-full border border-white/60 bg-gradient-to-r from-slate-50/80 via-white/85 to-slate-50/80 px-6"
+        )}
+      >
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-8">
+          <div className="flex flex-1 items-center gap-3 min-w-0">
+            <Link href="/" className="flex items-center gap-2">
+              <Logo />
+            </Link>
+          </div>
 
-        <div className="flex flex-1 items-center justify-end gap-3">
-          {user && !isOperator && !isAdmin && (
-            <Button
-              variant="outline"
-              asChild
-              className="hidden rounded-full border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white md:inline-flex"
-            >
-              <Link href="/operator/apply">
-                <Users className="mr-2 h-4 w-4" />
-                Become a Tour Operator
-              </Link>
-            </Button>
-          )}
+          <div className="flex flex-1 justify-center">
+            <NavMenu items={navItems} className="hidden items-center gap-6 md:flex" />
+          </div>
 
-          <AuthNav user={user} />
+          <div className="flex flex-1 items-center justify-end gap-3">
+            {user && !isOperator && !isAdmin && (
+              <Button
+                variant="outline"
+                asChild
+                className="hidden rounded-full border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white md:inline-flex"
+              >
+                <Link href="/operator/apply">
+                  <Users className="mr-2 h-4 w-4" />
+                  Become a Tour Operator
+                </Link>
+              </Button>
+            )}
 
-          <div className="md:hidden">
-            <NavigationSheet items={navItems} />
+            <AuthNav user={user} />
+
+            <div className="md:hidden">
+              <NavigationSheet items={navItems} />
+            </div>
           </div>
         </div>
       </div>
