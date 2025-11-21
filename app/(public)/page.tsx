@@ -2,10 +2,12 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { getTours } from "@/actions/tours";
+import { getPublishedBlogPosts } from "@/actions/blog";
 import { TourFilters } from "@/components/tours/tour-filters";
 import { TourGrid } from "@/components/tours/tour-grid";
 import { TourGridSkeleton } from "@/components/tours/tour-grid-skeleton";
 import { HeroSection } from "@/components/home/hero-section";
+import { BlogTeaser } from "@/components/blog/blog-teaser";
 
 export const metadata: Metadata = {
   title: "Browse Tours - Discover South Africa",
@@ -29,6 +31,12 @@ interface HomePageProps {
 export default async function HomePage({ searchParams }: HomePageProps) {
   // Show hero only if no filters are active
   const hasFilters = Object.keys(searchParams).length > 0;
+
+  const blogResult = await getPublishedBlogPosts();
+  const blogPosts =
+    blogResult.success && "data" in blogResult
+      ? blogResult.data.posts.slice(0, 3)
+      : [];
 
   const heading =
     searchParams.search
@@ -65,6 +73,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <ToursContent searchParams={searchParams} />
         </Suspense>
       </section>
+
+      {blogPosts.length > 0 && (
+        <section className="bg-gray-50/80 border-t">
+          <div className="container mx-auto px-4 py-12">
+            <BlogTeaser posts={blogPosts} />
+          </div>
+        </section>
+      )}
     </div>
   );
 }

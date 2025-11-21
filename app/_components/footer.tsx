@@ -50,7 +50,7 @@ export default function Footer() {
               </li>
               <li>
                 <a href="/blog" className="hover:text-gray-900">
-                  Travel Guide
+                  Blog
                 </a>
               </li>
               <li>
