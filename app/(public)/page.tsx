@@ -26,6 +26,8 @@ interface HomePageProps {
     maxPrice?: string;
     search?: string;
     page?: string;
+    durationRange?: string;
+    priceRange?: string;
   };
 }
 
@@ -48,13 +50,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ? blogResult.data.posts.slice(0, 3)
       : [];
 
+  const localDestList = searchParams.localDestination?.split(",").filter(Boolean) ?? [];
+  const countryList = searchParams.country?.split(",").filter(Boolean) ?? [];
+
   const heading =
     searchParams.search
       ? `Search results for "${searchParams.search}"`
-      : searchParams.localDestination
-        ? `Tours in ${searchParams.localDestination}`
-        : searchParams.country
-          ? `Tours in ${searchParams.country}`
+      : localDestList.length > 0
+        ? `Tours in ${localDestList.join(", ")}`
+        : countryList.length > 0
+          ? `Tours in ${countryList.join(", ")}`
           : null;
 
   return (
@@ -100,13 +105,34 @@ async function ToursContent({
   searchParams: HomePageProps['searchParams'];
   resolvedScope: ScopeValue;
 }) {
+  const durationRanges: Record<string, { minDuration?: number; maxDuration?: number }> = {
+    weekend: { maxDuration: 3 },
+    short: { minDuration: 4, maxDuration: 7 },
+    extended: { minDuration: 8, maxDuration: 14 },
+    expedition: { minDuration: 15 },
+  };
+  const priceRanges: Record<string, { minPrice?: number; maxPrice?: number }> = {
+    budget: { maxPrice: 5000 },
+    comfort: { minPrice: 5000, maxPrice: 10000 },
+    premium: { minPrice: 10000, maxPrice: 20000 },
+    luxury: { minPrice: 20000 },
+  };
+
+  const selectedDuration = searchParams.durationRange ? durationRanges[searchParams.durationRange] : undefined;
+  const selectedPrice = searchParams.priceRange ? priceRanges[searchParams.priceRange] : undefined;
+  const localDestinations = searchParams.localDestination?.split(",").filter(Boolean) ?? [];
+  const countries = searchParams.country?.split(",").filter(Boolean) ?? [];
+  const categories = searchParams.category?.split(",").filter(Boolean) ?? [];
+
   const result = await getTours({
-    localDestination: searchParams.localDestination,
-    country: searchParams.country,
+    localDestinations,
+    countries,
     scope: resolvedScope,
-    category: searchParams.category,
-    minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : undefined,
-    maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : undefined,
+    categories,
+    minPrice: selectedPrice?.minPrice ?? (searchParams.minPrice ? parseInt(searchParams.minPrice) : undefined),
+    maxPrice: selectedPrice?.maxPrice ?? (searchParams.maxPrice ? parseInt(searchParams.maxPrice) : undefined),
+    minDuration: selectedDuration?.minDuration,
+    maxDuration: selectedDuration?.maxDuration,
     search: searchParams.search,
     page: searchParams.page ? parseInt(searchParams.page) : 1,
   });

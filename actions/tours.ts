@@ -7,12 +7,14 @@ import { type ScopeValue } from "@/lib/scope";
 import { Prisma } from "@prisma/client";
 
 interface GetToursParams {
-    localDestination?: string; // Filter by SA regions/cities
-    country?: string; // Filter by international country
+    localDestinations?: string[]; // Filter by SA regions/cities
+    countries?: string[]; // Filter by international country
     scope?: "local" | "international"; // High-level scope filter
-    category?: string;
+    categories?: string[];
     minPrice?: number; // In cents
     maxPrice?: number; // In cents
+    minDuration?: number;
+    maxDuration?: number;
     search?: string;
     page?: number;
     limit?: number;
@@ -21,12 +23,14 @@ interface GetToursParams {
 export const getTours = async (params: GetToursParams = {}) => {
     try {
         const {
-            localDestination,
-            country,
+            localDestinations = [],
+            countries = [],
             scope,
-            category,
+            categories = [],
             minPrice,
             maxPrice,
+            minDuration,
+            maxDuration,
             search,
             page = 1,
             limit = 12,
@@ -41,21 +45,29 @@ export const getTours = async (params: GetToursParams = {}) => {
             },
         };
 
-        // Filter by local destination (South Africa only)
-        if (localDestination) {
-            where.AND = where.AND || [];
-            (where.AND as Prisma.TourWhereInput[]).push({
-                countries: { equals: ["South Africa"] }, // Only tours with SA as sole country
-                OR: [
-                    { region: { contains: localDestination, mode: "insensitive" } },
-                    { destinations: { has: localDestination } },
-                ]
-            });
-        }
+        // Filter by destinations/countries (OR across chosen sets)
+        if (localDestinations.length > 0 || countries.length > 0) {
+            const orConditions: Prisma.TourWhereInput[] = [];
 
-        // Filter by international country
-        if (country) {
-            where.countries = { has: country };
+            if (localDestinations.length > 0) {
+                const localConds = localDestinations.map((dest) => ({
+                    countries: { equals: ["South Africa"] },
+                    OR: [
+                        { region: { contains: dest, mode: "insensitive" } },
+                        { destinations: { has: dest } },
+                    ],
+                }));
+                orConditions.push({ OR: localConds });
+            }
+
+            if (countries.length > 0) {
+                orConditions.push({ countries: { hasSome: countries } });
+            }
+
+            if (orConditions.length > 0) {
+                where.AND = where.AND || [];
+                (where.AND as Prisma.TourWhereInput[]).push({ OR: orConditions });
+            }
         }
 
         // High-level scope filter
@@ -75,9 +87,9 @@ export const getTours = async (params: GetToursParams = {}) => {
             });
         }
 
-        // Filter by category
-        if (category) {
-            where.category = category;
+        // Filter by categories
+        if (categories.length > 0) {
+            where.category = { in: categories };
         }
 
         // Filter by price (priceFrom in cents)
@@ -93,6 +105,23 @@ export const getTours = async (params: GetToursParams = {}) => {
             if (maxPrice) {
                 (where.AND as Prisma.TourWhereInput[]).push({
                     priceFrom: { lte: maxPrice }
+                });
+            }
+        }
+
+        // Filter by duration
+        if (minDuration || maxDuration) {
+            where.AND = where.AND || [];
+
+            if (minDuration) {
+                (where.AND as Prisma.TourWhereInput[]).push({
+                    duration: { gte: minDuration }
+                });
+            }
+
+            if (maxDuration) {
+                (where.AND as Prisma.TourWhereInput[]).push({
+                    duration: { lte: maxDuration }
                 });
             }
         }

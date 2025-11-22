@@ -4,7 +4,6 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogContent,
@@ -23,20 +22,22 @@ import {
     Compass,
     Binoculars,
     X,
-    Loader2,
 } from "lucide-react";
 import { useState, useEffect, ElementType, useRef, useTransition } from "react";
 import { getLocalDestinations, getInternationalCountries, getCategories } from "@/actions/tours";
 import { type ScopeValue } from "@/lib/scope";
+import { TourGridSkeleton } from "./tour-grid-skeleton";
 
 interface TourFiltersProps {
     defaultValues?: {
         localDestination?: string;
         country?: string;
-        category?: string;
-        minPrice?: string;
-        maxPrice?: string;
-        search?: string;
+    category?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    search?: string;
+    durationRange?: string;
+    priceRange?: string;
     };
     scope: ScopeValue;
 }
@@ -46,11 +47,19 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
     const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
     const [search, setSearch] = useState(defaultValues?.search || "");
-    const [localDestination, setLocalDestination] = useState(defaultValues?.localDestination || "all");
-    const [country, setCountry] = useState(defaultValues?.country || "all");
-    const [category, setCategory] = useState(defaultValues?.category || "all");
+    const [localDestinationsSelected, setLocalDestinationsSelected] = useState<string[]>(
+        defaultValues?.localDestination ? defaultValues.localDestination.split(",").filter(Boolean) : []
+    );
+    const [countriesSelected, setCountriesSelected] = useState<string[]>(
+        defaultValues?.country ? defaultValues.country.split(",").filter(Boolean) : []
+    );
+    const [categoriesSelected, setCategoriesSelected] = useState<string[]>(
+        defaultValues?.category ? defaultValues.category.split(",").filter(Boolean) : []
+    );
     const [minPrice, setMinPrice] = useState(defaultValues?.minPrice || "");
     const [maxPrice, setMaxPrice] = useState(defaultValues?.maxPrice || "");
+    const [durationRange, setDurationRange] = useState(defaultValues?.durationRange || "all");
+    const [priceRange, setPriceRange] = useState(defaultValues?.priceRange || "all");
 
     // State for dynamic data
     const [localDestinations, setLocalDestinations] = useState<string[]>([]);
@@ -62,11 +71,13 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
     // Sync state when URL defaults change (e.g., scope toggle)
     useEffect(() => {
         setSearch(defaultValues?.search || "");
-        setLocalDestination(defaultValues?.localDestination || "all");
-        setCountry(defaultValues?.country || "all");
-        setCategory(defaultValues?.category || "all");
+        setLocalDestinationsSelected(defaultValues?.localDestination ? defaultValues.localDestination.split(",").filter(Boolean) : []);
+        setCountriesSelected(defaultValues?.country ? defaultValues.country.split(",").filter(Boolean) : []);
+        setCategoriesSelected(defaultValues?.category ? defaultValues.category.split(",").filter(Boolean) : []);
         setMinPrice(defaultValues?.minPrice || "");
         setMaxPrice(defaultValues?.maxPrice || "");
+        setDurationRange(defaultValues?.durationRange || "all");
+        setPriceRange(defaultValues?.priceRange || "all");
     }, [
         defaultValues?.search,
         defaultValues?.localDestination,
@@ -74,6 +85,8 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
         defaultValues?.category,
         defaultValues?.minPrice,
         defaultValues?.maxPrice,
+        defaultValues?.durationRange,
+        defaultValues?.priceRange,
     ]);
 
     // Fetch destinations and categories when scope changes
@@ -106,17 +119,14 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
         fetchFilterData();
     }, [scope]);
 
-    // Reset category if it no longer exists for the current scope
+    // Reset categories that no longer exist for the current scope (state only)
     useEffect(() => {
-        if (category !== "all" && categories.length > 0 && !categories.includes(category)) {
-            setCategory("all");
-            const params = new URLSearchParams(searchParams.toString());
-            params.delete("category");
-            params.delete("page");
-            const queryString = params.toString();
-            router.push(queryString ? `/?${queryString}` : "/");
+        if (categories.length === 0) return;
+        const valid = categoriesSelected.filter((c) => categories.includes(c));
+        if (valid.length !== categoriesSelected.length) {
+            setCategoriesSelected(valid);
         }
-    }, [categories, category, router, searchParams]);
+    }, [categories, categoriesSelected]);
 
     useEffect(() => {
         if (isDialogOpen && searchInputRef.current) {
@@ -124,50 +134,63 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
         }
     }, [isDialogOpen]);
 
-    const handleFilter = (overrides?: {
+    const applyFilters = (overrides?: {
         search?: string;
-        localDestination?: string;
-        country?: string;
-        category?: string;
+        localDestinationsSelected?: string[];
+        countriesSelected?: string[];
+        categoriesSelected?: string[];
         minPrice?: string;
         maxPrice?: string;
+        durationRange?: string;
+        priceRange?: string;
     }) => {
         const nextSearch = overrides?.search ?? search;
-        const nextLocalDestination = overrides?.localDestination ?? localDestination;
-        const nextCountry = overrides?.country ?? country;
-        const nextCategory = overrides?.category ?? category;
+        const nextLocalDestinations = overrides?.localDestinationsSelected ?? localDestinationsSelected;
+        const nextCountries = overrides?.countriesSelected ?? countriesSelected;
+        const nextCategories = overrides?.categoriesSelected ?? categoriesSelected;
         const nextMinPrice = overrides?.minPrice ?? minPrice;
         const nextMaxPrice = overrides?.maxPrice ?? maxPrice;
+        const nextDuration = overrides?.durationRange ?? durationRange;
+        const nextPriceRange = overrides?.priceRange ?? priceRange;
 
         const params = new URLSearchParams(searchParams.toString());
 
         if (nextSearch) params.set("search", nextSearch);
         else params.delete("search");
 
-        // Handle local destination
-        if (nextLocalDestination && nextLocalDestination !== "all") {
-            params.set("localDestination", nextLocalDestination);
-            params.delete("country"); // Clear country if local is selected
+        // Handle local destinations (multi)
+        if (nextLocalDestinations.length > 0) {
+            params.set("localDestination", nextLocalDestinations.join(","));
         } else {
             params.delete("localDestination");
         }
 
-        // Handle international country
-        if (nextCountry && nextCountry !== "all") {
-            params.set("country", nextCountry);
-            params.delete("localDestination"); // Clear local if country is selected
+        // Handle international countries (multi)
+        if (nextCountries.length > 0) {
+            params.set("country", nextCountries.join(","));
         } else {
             params.delete("country");
         }
 
-        if (nextCategory && nextCategory !== "all") params.set("category", nextCategory);
+        // Categories (multi)
+        if (nextCategories.length > 0) params.set("category", nextCategories.join(","));
         else params.delete("category");
 
-        if (nextMinPrice) params.set("minPrice", nextMinPrice);
-        else params.delete("minPrice");
+        if (nextPriceRange && nextPriceRange !== "all") {
+            params.set("priceRange", nextPriceRange);
+            params.delete("minPrice");
+            params.delete("maxPrice");
+        } else {
+            params.delete("priceRange");
+            if (nextMinPrice) params.set("minPrice", nextMinPrice);
+            else params.delete("minPrice");
 
-        if (nextMaxPrice) params.set("maxPrice", nextMaxPrice);
-        else params.delete("maxPrice");
+            if (nextMaxPrice) params.set("maxPrice", nextMaxPrice);
+            else params.delete("maxPrice");
+        }
+
+        if (nextDuration && nextDuration !== "all") params.set("durationRange", nextDuration);
+        else params.delete("durationRange");
 
         params.delete("page"); // Reset to page 1
 
@@ -179,36 +202,33 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
 
     const handleClear = () => {
         setSearch("");
-        setLocalDestination("all");
-        setCountry("all");
-        setCategory("all");
+        setLocalDestinationsSelected([]);
+        setCountriesSelected([]);
+        setCategoriesSelected([]);
         setMinPrice("");
         setMaxPrice("");
+        setDurationRange("all");
+        setPriceRange("all");
         startTransition(() => router.push("/"));
     };
 
     const handleSearchSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        handleFilter();
+        applyFilters();
         setIsDialogOpen(false);
     };
 
+    const toggleSelection = (current: string[], value: string) =>
+        current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+
     const handleLocalDestinationChange = (value: string) => {
-        const nextValue = localDestination === value ? "all" : value;
-        setLocalDestination(nextValue);
-        if (nextValue !== "all") {
-            setCountry("all");
-        }
-        handleFilter({ localDestination: nextValue, country: "all" });
+        const next = value === "all" ? [] : toggleSelection(localDestinationsSelected, value);
+        setLocalDestinationsSelected(next);
     };
 
     const handleCountryChange = (value: string) => {
-        const nextValue = country === value ? "all" : value;
-        setCountry(nextValue);
-        if (nextValue !== "all") {
-            setLocalDestination("all");
-        }
-        handleFilter({ country: nextValue, localDestination: "all" });
+        const next = value === "all" ? [] : toggleSelection(countriesSelected, value);
+        setCountriesSelected(next);
     };
 
     const categoryIconMap: Record<string, ElementType> = {
@@ -224,19 +244,67 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
         return { label: cat, value: cat, icon: Icon };
     });
 
+    const durationFilters = [
+        { label: "Weekend (1-3d)", value: "weekend" },
+        { label: "Short (4-7d)", value: "short" },
+        { label: "Extended (8-14d)", value: "extended" },
+        { label: "Expedition (15d+)", value: "expedition" },
+    ];
+
+    const priceFilters = [
+        { label: "Under R5k", value: "budget" },
+        { label: "R5k - R10k", value: "comfort" },
+        { label: "R10k - R20k", value: "premium" },
+        { label: "R20k+", value: "luxury" },
+    ];
+
     const handleCategoryChip = (value: string) => {
-        const nextValue = category === value ? "all" : value;
-        setCategory(nextValue);
-        handleFilter({ category: nextValue });
+        const next = toggleSelection(categoriesSelected, value);
+        setCategoriesSelected(next);
+    };
+
+    const handleDurationChange = (value: string) => {
+        const nextValue = durationRange === value ? "all" : value;
+        setDurationRange(nextValue);
+    };
+
+    const handlePriceRangeChange = (value: string) => {
+        const nextValue = priceRange === value ? "all" : value;
+        setPriceRange(nextValue);
+        if (nextValue !== "all") {
+            setMinPrice("");
+            setMaxPrice("");
+        }
     };
 
     const hasActiveFilters =
         (search?.trim?.() ?? "").length > 0 ||
-        localDestination !== "all" ||
-        country !== "all" ||
-        category !== "all" ||
+        localDestinationsSelected.length > 0 ||
+        countriesSelected.length > 0 ||
+        categoriesSelected.length > 0 ||
         minPrice !== "" ||
-        maxPrice !== "";
+        maxPrice !== "" ||
+        durationRange !== "all" ||
+        priceRange !== "all";
+
+    // Applied filters (from URL/defaults) — used for summary only after apply
+    const appliedLocal = defaultValues?.localDestination ? defaultValues.localDestination.split(",").filter(Boolean) : [];
+    const appliedCountries = defaultValues?.country ? defaultValues.country.split(",").filter(Boolean) : [];
+    const appliedCategories = defaultValues?.category ? defaultValues.category.split(",").filter(Boolean) : [];
+    const appliedSearch = defaultValues?.search?.trim?.() ?? "";
+    const appliedPrice =
+        (defaultValues?.minPrice ?? "") !== "" ||
+        (defaultValues?.maxPrice ?? "") !== "" ||
+        (defaultValues?.priceRange ?? "all") !== "all";
+    const appliedDuration = (defaultValues?.durationRange ?? "all") !== "all";
+
+    const appliedFilterCount =
+        (appliedSearch ? 1 : 0) +
+        (appliedLocal.length > 0 ? 1 : 0) +
+        (appliedCountries.length > 0 ? 1 : 0) +
+        (appliedCategories.length > 0 ? 1 : 0) +
+        (appliedPrice ? 1 : 0) +
+        (appliedDuration ? 1 : 0);
 
     const pillBase =
         "h-10 rounded-full border text-sm font-medium transition whitespace-nowrap px-3 inline-flex items-center gap-2";
@@ -260,7 +328,7 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
                     {/* Categories left, scrollable */}
                     <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 scroll-smooth snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {quickCategoryChips.map(({ label, value, icon: Icon }) => {
-                            const isActive = category === value;
+                            const isActive = categoriesSelected.includes(value);
                             return (
                                 <button
                                     key={`cat-${value}`}
@@ -278,6 +346,11 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
 
                     {/* Filters right */}
                     <div className="flex shrink-0 items-center gap-2">
+                        {appliedFilterCount > 0 && (
+                            <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                                {`${appliedFilterCount} filter${appliedFilterCount > 1 ? "s" : ""} applied`}
+                            </div>
+                        )}
                         <button
                             type="button"
                             className={`${pillBase} ${pillInactive} ${isPending ? pillDisabled : ""}`}
@@ -287,7 +360,7 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
                             <SlidersHorizontal className="h-4 w-4" />
                             <span>Filters</span>
                         </button>
-                        {hasActiveFilters && (
+                        {appliedFilterCount > 0 && (
                             <button
                                 type="button"
                                 className={`${pillBase} ${pillInactive} ${isPending ? pillDisabled : ""}`}
@@ -298,15 +371,19 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
                                 <span>Clear</span>
                             </button>
                         )}
-                        {isPending && (
-                            <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 bg-white">
-                                <Loader2 className="h-4 w-4 animate-spin text-slate-500" aria-hidden />
-                                <span>Updating</span>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
+
+            {isPending && (
+                <div className="relative z-20">
+                    <div className="container mx-auto px-0 sm:px-0">
+                        <div className="rounded-2xl border border-slate-200 bg-white/90 shadow-lg backdrop-blur p-4">
+                            <TourGridSkeleton />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="max-w-4xl shadow-none border border-slate-200">
@@ -335,70 +412,143 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
                         <div className="grid gap-6 md:grid-cols-2">
                             <div className="space-y-3">
                                 <Label className="text-sm font-semibold text-slate-800">Local (South Africa)</Label>
-                                <div className="space-y-2">
+                                <p className="text-xs text-slate-500">Pick one or more local hubs.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleLocalDestinationChange("all")}
+                                        className={`${pillBase} ${localDestinationsSelected.length === 0 ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                        disabled={isPending}
+                                    >
+                                        Any local
+                                    </button>
                                     {localDestinations.map((dest) => (
-                                        <label key={dest} className="flex items-center gap-3 text-sm text-slate-700">
-                                            <Checkbox
-                                                checked={localDestination === dest}
-                                                onCheckedChange={() => handleLocalDestinationChange(dest)}
-                                            />
-                                            <span>{dest}</span>
-                                        </label>
+                                        <button
+                                            key={dest}
+                                            type="button"
+                                            onClick={() => handleLocalDestinationChange(dest)}
+                                            className={`${pillBase} ${localDestinationsSelected.includes(dest) ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                            disabled={isPending}
+                                        >
+                                            {dest}
+                                        </button>
                                     ))}
-                                    <label className="flex items-center gap-3 text-sm text-slate-600">
-                                        <Checkbox
-                                            checked={localDestination === "all"}
-                                            onCheckedChange={() => handleLocalDestinationChange("all")}
-                                        />
-                                        <span>All Local</span>
-                                    </label>
                                 </div>
                             </div>
 
                             <div className="space-y-3">
                                 <Label className="text-sm font-semibold text-slate-800">International</Label>
-                                <div className="space-y-2">
+                                <p className="text-xs text-slate-500">Pick one or more countries.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCountryChange("all")}
+                                        className={`${pillBase} ${countriesSelected.length === 0 ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                        disabled={isPending}
+                                    >
+                                        Any country
+                                    </button>
                                     {internationalCountries.map((ctry) => (
-                                        <label key={ctry} className="flex items-center gap-3 text-sm text-slate-700">
-                                            <Checkbox
-                                                checked={country === ctry}
-                                                onCheckedChange={() => handleCountryChange(ctry)}
-                                            />
-                                            <span>{ctry}</span>
-                                        </label>
+                                        <button
+                                            key={ctry}
+                                            type="button"
+                                            onClick={() => handleCountryChange(ctry)}
+                                            className={`${pillBase} ${countriesSelected.includes(ctry) ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                            disabled={isPending}
+                                        >
+                                            {ctry}
+                                        </button>
                                     ))}
-                                    <label className="flex items-center gap-3 text-sm text-slate-600">
-                                        <Checkbox
-                                            checked={country === "all"}
-                                            onCheckedChange={() => handleCountryChange("all")}
-                                        />
-                                        <span>All Countries</span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
 
                         <Separator />
 
-                        <div className="space-y-3">
-                            <Label className="text-sm font-semibold text-slate-800">Categories</Label>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                                {categories.map((cat) => (
-                                    <label key={cat} className="flex items-center gap-3 text-sm text-slate-700">
-                                        <Checkbox
-                                            checked={category === cat}
-                                            onCheckedChange={() => handleCategoryChip(cat)}
-                                        />
-                                        <span>{cat}</span>
-                                    </label>
-                                ))}
-                                <label className="flex items-center gap-3 text-sm text-slate-600">
-                                    <Checkbox
-                                        checked={category === "all"}
-                                        onCheckedChange={() => handleCategoryChip("all")}
-                                    />
-                                    <span>All Categories</span>
-                                </label>
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-slate-800">Categories</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCategoriesSelected([]);
+                                        }}
+                                        className={`${pillBase} ${categoriesSelected.length === 0 ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                        disabled={isPending}
+                                    >
+                                        All categories
+                                    </button>
+                                    {categories.map((cat) => (
+                                        <button
+                                            key={cat}
+                                            type="button"
+                                            onClick={() => handleCategoryChip(cat)}
+                                            className={`${pillBase} ${categoriesSelected.includes(cat) ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                            disabled={isPending}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-slate-800">Duration</Label>
+                                <p className="text-xs text-slate-500">Choose the trip length you prefer.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {durationFilters.map((opt) => {
+                                        const active = durationRange === opt.value;
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => handleDurationChange(opt.value)}
+                                                className={`${pillBase} ${active ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                                disabled={isPending}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange("all")}
+                                        className={`${pillBase} ${durationRange === "all" ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                        disabled={isPending}
+                                    >
+                                        Any length
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-slate-800">Budget presets</Label>
+                                <p className="text-xs text-slate-500">Use presets or type a custom range below.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {priceFilters.map((opt) => {
+                                        const active = priceRange === opt.value;
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => handlePriceRangeChange(opt.value)}
+                                                className={`${pillBase} ${active ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                                disabled={isPending}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePriceRangeChange("all")}
+                                        className={`${pillBase} ${priceRange === "all" ? pillActive : pillInactive} ${isPending ? pillDisabled : ""}`}
+                                        disabled={isPending}
+                                    >
+                                        Any budget
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -411,14 +561,20 @@ export function TourFilters({ defaultValues, scope }: TourFiltersProps) {
                                     type="number"
                                     placeholder="Min"
                                     value={minPrice}
-                                    onChange={(e) => setMinPrice(e.target.value)}
+                                    onChange={(e) => {
+                                        setMinPrice(e.target.value);
+                                        setPriceRange("all");
+                                    }}
                                 />
                                 <span className="text-slate-400">-</span>
                                 <Input
                                     type="number"
                                     placeholder="Max"
                                     value={maxPrice}
-                                    onChange={(e) => setMaxPrice(e.target.value)}
+                                    onChange={(e) => {
+                                        setMaxPrice(e.target.value);
+                                        setPriceRange("all");
+                                    }}
                                 />
                             </div>
                         </div>
