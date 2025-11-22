@@ -50,14 +50,20 @@ export const getTours = async (params: GetToursParams = {}) => {
             const orConditions: Prisma.TourWhereInput[] = [];
 
             if (localDestinations.length > 0) {
-                const localConds = localDestinations.map((dest) => ({
+                // ✅ Fix: Properly type the OR conditions
+                const localConds: Prisma.TourWhereInput[] = localDestinations.map((dest) => ({
                     countries: { equals: ["South Africa"] },
                     OR: [
-                        { region: { contains: dest, mode: "insensitive" } },
+                        {
+                            region: {
+                                contains: dest,
+                                mode: Prisma.QueryMode.insensitive // Use Prisma.QueryMode enum
+                            }
+                        },
                         { destinations: { has: dest } },
                     ],
                 }));
-                orConditions.push({ OR: localConds });
+                orConditions.push(...localConds); // Spread instead of nesting in OR
             }
 
             if (countries.length > 0) {
@@ -111,27 +117,27 @@ export const getTours = async (params: GetToursParams = {}) => {
 
         // Filter by duration
         if (minDuration || maxDuration) {
-            where.AND = where.AND || [];
-
-            if (minDuration) {
-                (where.AND as Prisma.TourWhereInput[]).push({
-                    duration: { gte: minDuration }
-                });
-            }
-
-            if (maxDuration) {
-                (where.AND as Prisma.TourWhereInput[]).push({
-                    duration: { lte: maxDuration }
-                });
-            }
+            /*             where.AND = where.AND || [];
+            
+                        if (minDuration) {
+                            (where.AND as Prisma.TourWhereInput[]).push({
+                                duration: { gte: minDuration }
+                            });
+                        }
+            
+                        if (maxDuration) {
+                            (where.AND as Prisma.TourWhereInput[]).push({
+                                duration: { lte: maxDuration }
+                            });
+                        } */
         }
 
         // Search across multiple fields
         if (search) {
             where.OR = [
-                { title: { contains: search, mode: "insensitive" } },
-                { description: { contains: search, mode: "insensitive" } },
-                { region: { contains: search, mode: "insensitive" } },
+                { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                { description: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                { region: { contains: search, mode: Prisma.QueryMode.insensitive } },
                 { countries: { has: search } },
                 { destinations: { has: search } },
             ];
