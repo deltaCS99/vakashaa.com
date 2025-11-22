@@ -21,6 +21,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { OperatorQuoteResponseForm } from "@/components/operator/operator-quote-response-form";
 import { QuoteChatWidget } from "@/components/quotes/quote-chat-widget";
+import { formatPrice } from "@/lib/utils";
 
 export const metadata: Metadata = {
     title: "Quote Details | SA Tours Operator",
@@ -99,7 +100,7 @@ export default async function OperatorQuoteDetailPage({ params }: PageProps) {
                             <div className="text-right">
                                 <p className="text-xs text-gray-500">Current Quote</p>
                                 <p className="text-lg font-bold text-primary">
-                                    R{(quoteRequest.quotedPrice / 100).toLocaleString("en-ZA")}
+                                    {formatPrice(quoteRequest.quotedPrice)}
                                 </p>
                             </div>
                         )}

@@ -6,6 +6,7 @@ import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { QuoteStatus } from "@prisma/client";
 import { initializePayment } from "@/lib/paystack";
+import { sendNewMessageToOperator, sendNewQuoteNotificationToOperator } from "@/lib/whatsapp";
 
 interface CreateQuoteRequestParams {
     tourId: string;
@@ -139,8 +140,8 @@ export const createQuoteRequest = async (params: CreateQuoteRequestParams) => {
             },
         });
 
-        // TODO: Send notification email to operator
-        // TODO: Send confirmation email to customer
+        await sendNewQuoteNotificationToOperator({ quoteRequestId: quoteRequest.id });
+
 
         return response({
             success: true,
@@ -365,7 +366,7 @@ export const sendQuoteMessage = async (quoteRequestId: string, message: string) 
             },
         });
 
-        // TODO: Send notification to operator
+        await sendNewMessageToOperator({ quoteRequestId });
 
         return response({
             success: true,

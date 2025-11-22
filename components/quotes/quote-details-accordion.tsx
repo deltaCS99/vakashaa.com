@@ -14,6 +14,7 @@ import {
     Clock,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 
 interface QuoteDetailsAccordionProps {
     quoteRequest: any;
@@ -21,11 +22,6 @@ interface QuoteDetailsAccordionProps {
 
 export function QuoteDetailsAccordion({ quoteRequest }: QuoteDetailsAccordionProps) {
     const [isExpanded, setIsExpanded] = useState(true);
-
-    // Move formatPrice inside the component
-    const formatPrice = (priceInCents: number) => {
-        return `R${(priceInCents / 100).toLocaleString('en-ZA')}`;
-    };
 
     const isExpiringSoon = quoteRequest.quoteExpiresAt
         ? new Date(quoteRequest.quoteExpiresAt).getTime() - Date.now() < 24 * 60 * 60 * 1000

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { formatPrice } from "@/lib/utils";
 
 interface Tour {
   id: string;
@@ -23,11 +24,6 @@ interface RelatedToursProps {
 export function RelatedTours({ tours }: RelatedToursProps) {
   const defaultImage =
     "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
-
-  const formatPrice = (priceInCents: number, currency: string) => {
-    const amount = priceInCents / 100;
-    return `${currency} ${amount.toLocaleString("en-ZA")}`;
-  };
 
   return (
     <div>

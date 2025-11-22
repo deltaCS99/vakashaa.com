@@ -30,6 +30,7 @@ import { QuoteStatus, Tour } from "@prisma/client";
 import { acceptQuote, rejectQuote, cancelQuoteRequest } from "@/actions/quote-requests";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { formatPrice } from "@/lib/utils";
 
 interface QuoteActionsProps {
   quoteRequest: {
@@ -59,11 +60,6 @@ export function QuoteActions({ quoteRequest }: QuoteActionsProps) {
   const [showAcceptDialog, setShowAcceptDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
-
-  const formatPrice = (priceInCents: number) => {
-    const rands = priceInCents / 100;
-    return `R${rands.toLocaleString('en-ZA')}`;
-  };
 
   const isExpiringSoon = quoteRequest.quoteExpiresAt && quoteRequest.status === QuoteStatus.Quoted
     ? new Date(quoteRequest.quoteExpiresAt).getTime() - Date.now() < 24 * 60 * 60 * 1000

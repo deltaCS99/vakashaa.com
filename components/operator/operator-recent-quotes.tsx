@@ -18,6 +18,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { QuoteStatus } from "@prisma/client";
 import { formatDistanceToNow } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 
 interface RecentQuote {
   id: string;
@@ -98,11 +99,6 @@ const STATUS_CONFIG = {
 export function OperatorRecentQuotes({ quotes }: OperatorRecentQuotesProps) {
   const defaultImage =
     "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
-
-  const formatPrice = (priceInCents: number) => {
-    const rands = priceInCents / 100;
-    return `R${rands.toLocaleString("en-ZA")}`;
-  };
 
   return (
     <div className="space-y-3">

@@ -18,6 +18,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { markTourComplete } from "@/actions/operator/bookings";
 import { toast } from "sonner";
+import { formatPrice } from "@/lib/utils";
 
 interface OperatorBookingCardProps {
     booking: {
@@ -45,10 +46,6 @@ export function OperatorBookingCard({ booking }: OperatorBookingCardProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
-
-    const formatPrice = (priceInCents: number) => {
-        return `R${(priceInCents / 100).toLocaleString('en-ZA')}`;
-    };
 
     const getStatusBadge = () => {
         if (booking.disputeReason) {

@@ -16,6 +16,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { QuoteStatus } from "@prisma/client";
 import { formatDistanceToNow } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 
 interface OperatorQuoteCardProps {
     quote: {
@@ -104,10 +105,6 @@ export function OperatorQuoteCard({ quote }: OperatorQuoteCardProps) {
     const statusConfig = STATUS_CONFIG[quote.status];
     const StatusIcon = statusConfig.icon;
     const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
-
-    const formatPrice = (priceInCents: number) => {
-        return `R${(priceInCents / 100).toLocaleString('en-ZA')}`;
-    };
 
     const totalGuests = quote.adults + quote.children;
     const hasMessages = quote.messages.length > 0;

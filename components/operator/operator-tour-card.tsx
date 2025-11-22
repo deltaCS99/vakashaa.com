@@ -28,6 +28,7 @@ import Image from "next/image";
 import { toggleTourActive, deleteTour } from "@/actions/operator/tours";
 import { TourFormDialog } from "./tour-form-dialog";
 import { toast } from "sonner";
+import { formatPrice } from "@/lib/utils";
 
 interface OperatorTourCardProps {
     tour: {
@@ -60,11 +61,6 @@ export function OperatorTourCard({ tour, operatorProfileId }: OperatorTourCardPr
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
     const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
-
-    const formatPrice = (priceInCents: number) => {
-        const rands = priceInCents / 100;
-        return `${tour.currency} ${rands.toLocaleString("en-ZA")}`;
-    };
 
     const handleToggleActive = async () => {
         setIsToggling(true);

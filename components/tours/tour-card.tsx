@@ -14,6 +14,7 @@ import {
   Compass,
   type LucideIcon,
 } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
 
 interface TourCardProps {
   tour: {
@@ -35,18 +36,6 @@ interface TourCardProps {
 }
 
 export function TourCard({ tour }: TourCardProps) {
-  const formatPrice = (priceInCents: number, currency: string) => {
-    const amount = priceInCents / 100;
-    try {
-      return new Intl.NumberFormat("en-ZA", {
-        style: "currency",
-        currency: currency || "ZAR",
-        maximumFractionDigits: 0,
-      }).format(amount);
-    } catch {
-      return `R${amount.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
-    }
-  };
 
   const defaultImage =
     "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
@@ -202,9 +191,6 @@ export function TourCard({ tour }: TourCardProps) {
           <div className="w-full border-t border-gray-100">
             {tour.priceFrom ? (
               <div className="flex flex-wrap items-end justify-between gap-4">
-                <span className="text-base font-medium text-gray-500 line-through">
-                  {formatPrice(tour.priceFrom, tour.currency)}
-                </span>
                 <div className="flex items-end gap-2">
                   <span className="text-3xl font-semibold text-gray-900">
                     {formatPrice(tour.priceFrom, tour.currency)}

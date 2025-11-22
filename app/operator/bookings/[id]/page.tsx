@@ -21,6 +21,7 @@ import Image from "next/image";
 import { format, isPast } from "date-fns";
 import { OperatorBookingActions } from "@/components/operator/operator-booking-actions";
 import { getOperatorBookingById } from "@/actions/operator/bookings";
+import { formatPrice } from "@/lib/utils";
 
 export const metadata: Metadata = {
     title: "Booking Details | SA Tours Operator",
@@ -58,10 +59,6 @@ export default async function OperatorBookingDetailPage({
 
     const defaultImage =
         "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=800&h=600&fit=crop";
-
-    const formatPrice = (priceInCents: number) => {
-        return `R${(priceInCents / 100).toLocaleString("en-ZA")}`;
-    };
 
     const totalGuests = booking.adults + booking.children;
     const canMarkComplete =

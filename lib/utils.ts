@@ -13,6 +13,23 @@ export async function hashPassword(password: string) {
 }
 
 /**
+ * Format price consistently on server and client
+ * Prevents hydration errors
+ */
+export function formatPrice(cents: number, currency: string = "ZAR"): string {
+  const amount = cents / 100;
+  const symbol = currency === "ZAR" ? "R" : "$";
+
+  // Use Intl.NumberFormat for consistent formatting
+  const formatted = new Intl.NumberFormat("en-ZA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+  return `${symbol}${formatted}`;
+}
+
+/**
  * Function to check whether the given value is expired or not.
  * @param expires The date that want to check
  * @return true if the value is expired, false otherwise

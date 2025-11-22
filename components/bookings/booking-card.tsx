@@ -12,6 +12,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { formatDistanceToNow, format } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 
 interface BookingCardProps {
     booking: {
@@ -34,10 +35,6 @@ interface BookingCardProps {
 
 export function BookingCard({ booking }: BookingCardProps) {
     const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=400&h=300&fit=crop";
-
-    const formatPrice = (priceInCents: number) => {
-        return `R${(priceInCents / 100).toLocaleString('en-ZA')}`;
-    };
 
     const getStatusBadge = () => {
         if (booking.disputeReason) {

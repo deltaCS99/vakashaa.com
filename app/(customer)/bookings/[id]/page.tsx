@@ -19,6 +19,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { format } from "date-fns";
 import { BookingActions } from "@/components/bookings/booking-actions";
+import { formatPrice } from "@/lib/utils";
 
 export const metadata: Metadata = {
     title: "Booking Details | SA Tours",
@@ -54,10 +55,6 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
 
     const defaultImage =
         "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=800&h=600&fit=crop";
-
-    const formatPrice = (priceInCents: number) => {
-        return `R${(priceInCents / 100).toLocaleString("en-ZA")}`;
-    };
 
     return (
         <div className="min-h-screen bg-gray-50/50">

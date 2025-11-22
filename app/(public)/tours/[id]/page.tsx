@@ -11,6 +11,7 @@ import { MapPin, Clock, Users, Calendar, Check, X, Globe, ArrowLeft } from "luci
 import { QuoteRequestForm } from "@/components/tours/quote-request-form";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { formatPrice } from "@/lib/utils";
 
 interface TourDetailPageProps {
     params: {
@@ -50,13 +51,6 @@ export default async function TourDetailPage({ params }: TourDetailPageProps) {
 
     const { tour } = result.data;
     const user = await currentUser();
-    console.log(user)
-
-    // Format price from cents to Rands
-    const formatPrice = (priceInCents: number) => {
-        const rands = priceInCents / 100;
-        return `R${rands.toLocaleString('en-ZA')}`;
-    };
 
     const defaultImage = "https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=800&h=600&fit=crop";
 

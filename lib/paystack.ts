@@ -2,6 +2,10 @@
 "use server";
 
 import { db } from "@/lib/db";
+import {
+    sendPaymentSuccessWhatsApp,
+    sendBookingConfirmationWhatsApp
+} from "@/lib/whatsapp";
 
 if (!process.env.PAYSTACK_SECRET_KEY) {
     throw new Error("PAYSTACK_SECRET_KEY is not set");
@@ -43,7 +47,7 @@ export async function initializePayment(params: {
 
         return {
             success: true,
-            authorizationUrl: data.data.authorization_url, // This is where you redirect
+            authorizationUrl: data.data.authorization_url,
             reference: data.data.reference,
         };
     } catch (error) {
@@ -87,5 +91,61 @@ export async function verifyPayment(reference: string) {
             success: false,
             error: "Payment verification failed",
         };
+    }
+}
+
+/**
+ * Handle Paystack webhook (for payment confirmation)
+ * Use this in app/api/webhooks/paystack/route.ts
+ */
+export async function handlePaystackWebhook(payload: any) {
+    try {
+        const event = payload.event;
+        const data = payload.data;
+
+        if (event === "charge.success") {
+            const reference = data.reference;
+            const amount = data.amount;
+            const paidAt = data.paid_at;
+
+            // Find quote request
+            const quoteRequest = await db.quoteRequest.findFirst({
+                where: { paymentReference: reference },
+            });
+
+            if (!quoteRequest) {
+                console.error("Quote request not found for webhook reference:", reference);
+                return { success: false, error: "Quote not found" };
+            }
+
+            // Check if already processed
+            if (quoteRequest.status === "Paid") {
+                console.log(`Payment already processed for ${reference}`);
+                return { success: true, message: "Already processed" };
+            }
+
+            // Update to paid
+            await db.quoteRequest.update({
+                where: { id: quoteRequest.id },
+                data: {
+                    status: "Paid",
+                    paidAt: new Date(paidAt),
+                    paidAmount: amount,
+                },
+            });
+
+            // Send WhatsApp notifications
+            await sendPaymentSuccessWhatsApp({ quoteRequestId: quoteRequest.id });
+            await sendBookingConfirmationWhatsApp({ quoteRequestId: quoteRequest.id });
+
+            console.log(`✅ Webhook: Payment confirmed for ${reference}`);
+
+            return { success: true };
+        }
+
+        return { success: true, message: "Event not handled" };
+    } catch (error) {
+        console.error("❌ Webhook error:", error);
+        return { success: false, error: "Webhook processing failed" };
     }
 }

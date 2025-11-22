@@ -6,6 +6,7 @@ import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { QuoteStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { sendTourCompletedNotification } from "@/lib/whatsapp";
 
 // Get operator's bookings (paid quotes)
 export const getOperatorBookings = async (businessId?: string) => {
@@ -211,7 +212,7 @@ export const markTourComplete = async (quoteRequestId: string) => {
             },
         });
 
-        // TODO: Send notification to customer to confirm
+        await sendTourCompletedNotification({ quoteRequestId });
 
         revalidatePath("/operator/bookings");
         revalidatePath(`/operator/bookings/${quoteRequestId}`);

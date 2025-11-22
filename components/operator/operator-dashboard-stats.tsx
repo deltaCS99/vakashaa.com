@@ -14,6 +14,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
+import { formatPrice } from "@/lib/utils";
 
 interface DashboardStatsProps {
   stats: {
@@ -122,7 +123,7 @@ export function OperatorDashboardStats({ stats }: DashboardStatsProps) {
             <div className="flex items-baseline gap-2">
               <DollarSign className="w-5 h-5 text-gray-400" />
               <div className="text-2xl font-bold">
-                R{((stats.totalRevenue || 0) / 100).toLocaleString("en-ZA")}
+                {formatPrice(stats.totalRevenue || 0)}
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-1">From confirmed bookings</p>

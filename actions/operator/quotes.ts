@@ -7,6 +7,7 @@ import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { QuoteStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { sendNewMessageToCustomer, sendQuoteResponseNotificationToCustomer } from "@/lib/whatsapp";
 
 // Get all quote requests for operator's tours
 export const getOperatorQuoteRequests = async (businessId?: string) => {
@@ -290,7 +291,7 @@ export const respondToQuote = async (params: RespondToQuoteParams) => {
             },
         });
 
-        // TODO: Send email notification to customer
+        await sendQuoteResponseNotificationToCustomer({ quoteRequestId: params.quoteRequestId });
 
         revalidatePath("/operator/quotes");
         revalidatePath(`/operator/quotes/${params.quoteRequestId}`);
@@ -366,7 +367,7 @@ export const sendOperatorMessage = async (
             },
         });
 
-        // TODO: Send notification to customer
+        await sendNewMessageToCustomer({ quoteRequestId });
 
         return response({
             success: true,

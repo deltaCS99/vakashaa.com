@@ -56,6 +56,7 @@ import {
 import { toast } from "sonner";
 import { WhatsAppMessageDialog } from "./whatsapp-message-dialog";
 import { QuoteStatus } from "@prisma/client";
+import { formatPrice } from "@/lib/utils";
 
 interface OperatorDetailsProps {
     operator: {
@@ -339,7 +340,7 @@ export function OperatorDetails({ operator }: OperatorDetailsProps) {
                         <CardContent className="pt-6">
                             <div className="text-center">
                                 <CreditCard className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-                                <p className="text-2xl font-bold">R{(totalRevenue / 100).toLocaleString()}</p>
+                                <p className="text-2xl font-bold">{formatPrice(totalRevenue)}</p>
                                 <p className="text-sm text-muted-foreground">Total Revenue</p>
                             </div>
                         </CardContent>
@@ -665,7 +666,7 @@ export function OperatorDetails({ operator }: OperatorDetailsProps) {
                                                         <span>•</span>
                                                         <span>
                                                             {tour.priceFrom
-                                                                ? `${tour.currency === "ZAR" ? "R" : "$"}${(tour.priceFrom / 100).toLocaleString()}`
+                                                                ? `${formatPrice(tour.priceFrom)}`
                                                                 : "Price on request"
                                                             }
                                                         </span>
@@ -745,7 +746,7 @@ export function OperatorDetails({ operator }: OperatorDetailsProps) {
                                                         </td>
                                                         <td className="px-4 py-3 text-sm font-medium">
                                                             {quote.quotedPrice
-                                                                ? `R${(quote.quotedPrice / 100).toLocaleString()}`
+                                                                ? `${formatPrice(quote.quotedPrice)}`
                                                                 : "-"}
                                                         </td>
                                                         <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -998,7 +999,7 @@ export function OperatorDetails({ operator }: OperatorDetailsProps) {
                                         <div>
                                             <Label className="text-xs text-muted-foreground">Quoted Amount</Label>
                                             <p className="text-2xl font-bold mt-1">
-                                                R{(selectedQuote.quotedPrice / 100).toLocaleString()}
+                                                {formatPrice(selectedQuote.quotedPrice)}
                                             </p>
                                         </div>
                                     )}

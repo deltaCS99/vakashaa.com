@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
 import { response } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
-import { sendOperatorWhatsAppNotification } from "@/lib/whatsapp";
+import { sendOperatorApprovedNotification, sendOperatorBankRejectedNotification, sendOperatorQualityControlMessage, sendOperatorRejectedNotification } from "@/lib/whatsapp";
 
 
 // Get all operators with filters
@@ -281,7 +281,7 @@ export const approveOperator = async (operatorId: string) => {
             },
         });
 
-        // TODO: Send approval email to operator
+        await sendOperatorApprovedNotification({ operatorId });
 
         revalidatePath("/admin/operators");
         revalidatePath("/admin/dashboard");
@@ -387,7 +387,7 @@ export const rejectOperator = async (operatorId: string, reason: string) => {
             },
         });
 
-        // TODO: Send rejection email to operator with reason
+        await sendOperatorRejectedNotification({ operatorId, reason });
 
         revalidatePath("/admin/operators");
         revalidatePath("/admin/dashboard");
@@ -537,7 +537,7 @@ export const rejectBankDetails = async (operatorId: string, reason: string) => {
             },
         });
 
-        // TODO: Send bank rejection email
+        await sendOperatorBankRejectedNotification({ operatorId, reason });
 
         revalidatePath("/admin/operators");
         revalidatePath("/admin/dashboard");
@@ -581,25 +581,39 @@ export const sendOperatorWhatsApp = async (params: {
             });
         }
 
-        // Send WhatsApp message via Twilio
-        const result = await sendOperatorWhatsAppNotification({
-            operatorId: params.operatorId,
-            message: params.message,
-            type: params.type,
-        });
+        let result;
 
-        if (!result.success) {
+        // Use appropriate template based on type
+        if (params.type === "quality_control" || params.type === "general") {
+            result = await sendOperatorQualityControlMessage({
+                operatorId: params.operatorId,
+                message: params.message,
+            });
+        } else if (params.type === "approval") {
+            result = await sendOperatorApprovedNotification({
+                operatorId: params.operatorId,
+            });
+        } else if (params.type === "rejection") {
+            result = await sendOperatorRejectedNotification({
+                operatorId: params.operatorId,
+                reason: params.message,
+            });
+        } else if (params.type === "bank_rejection") {
+            result = await sendOperatorBankRejectedNotification({
+                operatorId: params.operatorId,
+                reason: params.message,
+            });
+        }
+
+        if (!result?.success) {
             return response({
                 success: false,
                 error: {
                     code: 400,
-                    message: result.error || "Failed to send WhatsApp message",
+                    message: result?.error || "Failed to send WhatsApp message",
                 },
             });
         }
-
-        // Log the notification (optional - for audit trail)
-        // You could create a notifications table to track sent messages
 
         revalidatePath(`/admin/operators/${params.operatorId}`);
 
@@ -607,7 +621,7 @@ export const sendOperatorWhatsApp = async (params: {
             success: true,
             code: 200,
             data: {
-                messageId: (result as { success: true; messageId?: string }).messageId,
+                messageId: result.messageId,
                 message: "WhatsApp notification sent successfully",
             },
         });

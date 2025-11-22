@@ -34,6 +34,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Calendar, Users, Minus, Plus, Loader2, CheckCircle2, MessageCircle } from "lucide-react";
 import { createQuoteRequest } from "@/actions/quote-requests";
+import { formatPrice } from "@/lib/utils";
 
 interface QuoteRequestFormProps {
     tour: {
@@ -110,11 +111,6 @@ export function QuoteRequestForm({ tour, user }: QuoteRequestFormProps) {
             setChildAges(childAges.slice(0, children));
         }
     }, [children, childAges]);
-
-    const formatPrice = (priceInCents: number) => {
-        const rands = priceInCents / 100;
-        return `R${rands.toLocaleString('en-ZA')}`;
-    };
 
     const totalGuests = adults + children;
     const isOverCapacity = tour.maxCapacity ? totalGuests > tour.maxCapacity : false;
